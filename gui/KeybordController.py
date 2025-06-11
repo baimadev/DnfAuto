@@ -248,20 +248,16 @@ class KeyBoard:
                     if pressed:
                         self.release(k)
 
-    def type_string(self, text, speed_range=(0.05, 0.2)):
+    def hold2(self, key, duration=1.0):
         """
-        模拟输入字符串
-        :param text: 要输入的字符串
-        :param speed_range: 字符间的输入速度范围（秒）
+        按下按键，并保持一段时间以触发系统自动重复输入
+        :param key: 按键名称
+        :param duration: 按住总时间（秒）
         """
-        for char in text:
-            # 只处理支持的字符
-            if char.lower() in VK_CODES:
-                self.click(char.lower())
-                self._random_sleep(speed_range)
-            else:
-                # 对于不支持的字符，跳过或记录警告
-                print(f"Warning: Character '{char}' not supported")
+        self.press(key)  # 发送 keydown
+        time.sleep(0.3)  # 等待系统开始自动重复
+        time.sleep(duration - 0.3)  # 保持按下状态
+        self.release(key)  # 最后释放按键
 
 
 # 使用示例
@@ -269,40 +265,41 @@ if __name__ == "__main__":
     import time as sleep_time
 
     kb = KeyBoard()
-
+    #
     # 给用户5秒时间切换到目标应用
     print("切换到目标应用...")
-    sleep_time.sleep(5)
+    sleep_time.sleep(2)
+    #
+    # # 测试基本输入
+    # print("输入'hello'")
+    # kb.type_string("hello")
+    #
+    # # 测试回车
+    # print("按回车")
+    # kb.click('enter')
+    #
+    # # 测试按住功能（现在会触发系统自动重复）
+    # print("按住'x'键2秒")
+    # kb.hold('x', duration=2)  # 按住2秒
+    # kb.release('x')  # 释放
+    #
+    # # 测试双击并按住
+    # print("双击并按住'a'键")
+    # kb.double_click_and_hold('a', hold_duration=1.5)
+    # kb.release('a')  # 释放
+    #
+    # # 测试方向键操作
+    # print("双击上箭头")
+    # kb.double_click('up_arrow')
+    #
+    # print("按住右箭头1秒")
+    # kb.hold2('x',3)
+    kb.hold('x', duration=5)
+    kb.release('x')
 
-    # 测试基本输入
-    print("输入'hello'")
-    kb.type_string("hello")
-
-    # 测试回车
-    print("按回车")
-    kb.click('enter')
-
-    # 测试按住功能（现在会触发系统自动重复）
-    print("按住'x'键2秒")
-    kb.hold('x', duration=2)  # 按住2秒
-    kb.release('x')  # 释放
-
-    # 测试双击并按住
-    print("双击并按住'a'键")
-    kb.double_click_and_hold('a', hold_duration=1.5)
-    kb.release('a')  # 释放
-
-    # 测试方向键操作
-    print("双击上箭头")
-    kb.double_click('up_arrow')
-
-    print("按住右箭头1秒")
-    kb.hold('right_arrow', duration=1)
-    kb.release('right_arrow')
-
-    # 测试自动重复功能
-    print("模拟重复输入'x'5次")
-    kb.auto_repeat('x', times=5)
+    # # 测试自动重复功能
+    # print("模拟重复输入'x'5次")
+    # kb.auto_repeat('x', times=5)
 
     # 确保所有按键都已释放
     kb.release_any()
