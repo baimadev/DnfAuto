@@ -1,9 +1,12 @@
+import cv2
 from paddleocr import PaddleOCR
-from PIL import Image
+from PIL import Image, ImageGrab
 import numpy as np
-from draw_ocr import draw_boxes_on_image
 import pprint
 import time
+
+from ocr.draw_ocr import draw_boxes_on_image
+
 
 class SingletonMeta(type):
     _instances = {}
@@ -73,13 +76,24 @@ class OcrUtil(metaclass=SingletonMeta):
 if __name__ == "__main__":
     ocr_util = OcrUtil()
     start_time = time.time()
-    result = ocr_util.check_multi_text_exist(["修理装备","德利拉"], "test.png")
+    screenshot = ImageGrab.grab()
+    image_np = np.array(screenshot)  # 得到 RGB 格式数组
+    result = ocr_util.ocr.predict(image_np)
     end_time = time.time()
     print(f"OCR 检测耗时: {end_time - start_time:.2f} 秒")
-    if not result:
-        print("未找到目标文本")
-    else:
-        np.set_printoptions(threshold=1_000_000_000, suppress=True)
-        pp = pprint.PrettyPrinter(indent=4)
-        pp.pprint(result)
+    for res in result:
+        res.print()
+        res.save_to_img("output")
+        res.save_to_json("output")
+
+    # result = ocr_util.check_multi_text_exist(["修理装备","德利拉"], image_bgr)
+    # end_time = time.time()
+    # print(f"OCR 检测耗时: {end_time - start_time:.2f} 秒")
+    # ocr_util.ocr_test(result)
+    # if not result:
+    #     print("未找到目标文本")
+    # else:
+    #     np.set_printoptions(threshold=1_000_000_000, suppress=True)
+    #     pp = pprint.PrettyPrinter(indent=4)
+    #     pp.pprint(result)
 
