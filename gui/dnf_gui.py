@@ -62,45 +62,28 @@ class DnfGUI:
         self.root.update()
         self.root.focus_force()
 
-    # ✅ 新增：启动检测逻辑
     def on_start(self):
-        """点击“启动检测”或按下 Ctrl+Q 时调用"""
         if not self.running:
-            self.running = True
-            self.start_button.config(state=tk.DISABLED)
-            self.stop_button.config(state=tk.NORMAL)
+            self.update_buttons(True)
             self.log("实时检测已启动...")
             threading.Thread(target=self._run_start_callback, daemon=True).start()
-
-    # ✅ 新增：停止检测逻辑
     def on_stop(self):
-        """点击“停止检测”或按下 Ctrl+W 时调用"""
         if self.running:
-            self.running = False
-            self.stop_button.config(state=tk.DISABLED)
+            self.update_buttons(False)
             self.log("检测已停止。")
             threading.Thread(target=self._run_stop_callback, daemon=True).start()
 
     def _run_start_callback(self):
-        """在子线程中执行 start_callback"""
         try:
             self.start_callback()
         except Exception as e:
             self.root.after(0, self.log, f"启动任务出错: {e}")
 
     def _run_stop_callback(self):
-        """在子线程中执行 stop_callback"""
         try:
             self.stop_callback()
         except Exception as e:
             self.root.after(0, self.log, f"停止任务出错: {e}")
-        finally:
-            # 确保最终更新 UI 在主线程中执行
-            self.root.after(0, self._finalize_stop)
-
-    def _finalize_stop(self):
-        self.stop_button.config(state=tk.DISABLED)
-        self.start_button.config(state=tk.NORMAL)
 
     def log(self, message):
         import datetime

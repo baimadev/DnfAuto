@@ -1,21 +1,13 @@
+import random
+import time
 from time import sleep
 
-from gui.task.task_base import Task
-import time
-import tkinter as tk
-import threading
-import pyautogui
-import numpy as np
-import time
-import os
-import sys
-from ctypes import windll
-from ultralytics import YOLO
-import random
-from PIL import ImageGrab
 import cv2
+import numpy as np
 import win32gui
+from PIL import ImageGrab
 
+from gui.task.task_base import Task
 from gui.utils.tkinter_overlay import TkinterOverlay
 
 

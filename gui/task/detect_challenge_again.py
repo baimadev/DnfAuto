@@ -1,29 +1,18 @@
+import random
+import time
 from time import sleep
 
-from gui.task.task_base import Task
-import time
-import tkinter as tk
-import threading
-import pyautogui
 import numpy as np
-import time
-import os
-import sys
-from ctypes import windll
-from ultralytics import YOLO
-import random
-from PIL import ImageGrab
-import cv2
 import win32gui
+from PIL import ImageGrab
 
-from gui.utils.tkinter_overlay import TkinterOverlay
+from gui.task.task_base import Task
 from ocr.ocr_util import OcrUtil
 
 
 class DetextChallengeAgain(Task):
     def __init__(self, gui):
         super().__init__("detect_challenge_again", gui)
-        self.overlay = TkinterOverlay()
         self.ocr = OcrUtil()
 
     def execute(self):
@@ -50,7 +39,7 @@ class DetextChallengeAgain(Task):
     def handle_detection(self, box):
         self.is_dnf_foreground()
         try:
-            if box:
+            if box is not None:
                 self.gui.log(f"detect target {box}")
                 if not hasattr(self, 'detection_start_time'):
                     self.detection_start_time = time.time()
@@ -67,8 +56,6 @@ class DetextChallengeAgain(Task):
                         sleep(random.uniform(3, 5))
             else:
                 self.gui.log("nothing found")
-                if self.is_stopped():
-                    self.overlay.clear_overlay()
 
         except Exception as e:
             print(f"处理检测结果出错: {e}")
