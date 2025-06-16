@@ -1,4 +1,4 @@
-from gui.keybord.wuya_test import WyhkmCOM
+from gui.keybord.keyboard_util import WyhkmCOM
 
 # 方法1：使用PyTorch
 import torch

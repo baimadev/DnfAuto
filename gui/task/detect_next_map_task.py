@@ -10,7 +10,7 @@ from PIL import ImageGrab
 from gui.task.task_base import Task
 from gui.utils.tkinter_overlay import TkinterOverlay
 
-
+# detect by yolo
 class DetextNextMapTask(Task):
     def __init__(self, gui, model):
         super().__init__("detect_next_map", gui)
@@ -29,7 +29,7 @@ class DetextNextMapTask(Task):
                 screen_np = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)
                 results = self.model.predict(screen_np, verbose=False)
 
-                if not self.is_stopped():  # 只有在运行状态下才更新 overlay
+                if not self.is_stopped():
                     self.overlay.update_overlay(results, self.model)
 
                 elapsed = time.time() - start_time

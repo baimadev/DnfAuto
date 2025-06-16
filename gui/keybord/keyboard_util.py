@@ -1,35 +1,47 @@
 import os
-import sys
 import ctypes
 import platform
 from time import sleep
 import time
 import pythoncom
 import win32com.client
-from paddle.base.libpaddle.eager.ops.legacy import add_act_xpu
+import concurrent.futures
 
 KEY_MAP = {
-        'Backspace': 8, 'Tab': 9, 'Enter': 13, 'Shift': 16, 'Ctrl': 17, 'Alt': 18,
-        'CapsLock': 20, 'Esc': 27, 'Space': 32, 'PageUp': 33, 'PageDown': 34,
-        'End': 35, 'Home': 36, 'Left': 37, 'Up': 38, 'Right': 39, 'Down': 40,
-        'PrintScreen': 44, 'Insert': 45, 'Delete': 46,
-        '0': 48, '1': 49, '2': 50, '3': 51, '4': 52, '5': 53, '6': 54, '7': 55, '8': 56, '9': 57,
-        'A': 65, 'B': 66, 'C': 67, 'D': 68, 'E': 69, 'F': 70, 'G': 71, 'H': 72, 'I': 73,
-        'J': 74, 'K': 75, 'L': 76, 'M': 77, 'N': 78, 'O': 79, 'P': 80, 'Q': 81, 'R': 82,
-        'S': 83, 'T': 84, 'U': 85, 'V': 86, 'W': 87, 'X': 88, 'Y': 89, 'Z': 90,
-        'F1': 112, 'F2': 113, 'F3': 114, 'F4': 115, 'F5': 116, 'F6': 117, 'F7': 118,
-        'F8': 119, 'F9': 120, 'F10': 121, 'F11': 122, 'F12': 123,
-        'NumLock': 144, 'ScrollLock': 145,
-        ';': 186, '=': 187, ',': 188, '-': 189, '.': 190, '/': 191, '`': 192,
-        '[': 219, '\\': 220, ']': 221, "'": 222
-    }
+    'Backspace': 8, 'Tab': 9, 'Enter': 13, 'Shift': 16, 'Ctrl': 17, 'Alt': 18,
+    'CapsLock': 20, 'Esc': 27, 'Space': 32, 'PageUp': 33, 'PageDown': 34,
+    'End': 35, 'Home': 36, 'Left': 37, 'Up': 38, 'Right': 39, 'Down': 40,
+    'PrintScreen': 44, 'Insert': 45, 'Delete': 46,
+    '0': 48, '1': 49, '2': 50, '3': 51, '4': 52, '5': 53, '6': 54, '7': 55, '8': 56, '9': 57,
+    'A': 65, 'B': 66, 'C': 67, 'D': 68, 'E': 69, 'F': 70, 'G': 71, 'H': 72, 'I': 73,
+    'J': 74, 'K': 75, 'L': 76, 'M': 77, 'N': 78, 'O': 79, 'P': 80, 'Q': 81, 'R': 82,
+    'S': 83, 'T': 84, 'U': 85, 'V': 86, 'W': 87, 'X': 88, 'Y': 89, 'Z': 90,
+    'F1': 112, 'F2': 113, 'F3': 114, 'F4': 115, 'F5': 116, 'F6': 117, 'F7': 118,
+    'F8': 119, 'F9': 120, 'F10': 121, 'F11': 122, 'F12': 123,
+    'NumLock': 144, 'ScrollLock': 145,
+    ';': 186, '=': 187, ',': 188, '-': 189, '.': 190, '/': 191, '`': 192,
+    '[': 219, '\\': 220, ']': 221, "'": 222
+}
 
 class WyhkmCOM:
+    _instance = None  # 单例实例
+    _initialized = False  # 标记是否已初始化
 
-
+    def __new__(cls, dll_path=None, auto_connect=True):
+        """实现单例模式"""
+        if cls._instance is None:
+            cls._instance = super(WyhkmCOM, cls).__new__(cls)
+            # 初始化标志设为False，将在__init__中完成
+            cls._instance._initialized = False
+        return cls._instance
 
     def __init__(self, dll_path=None, auto_connect=True):
-        """初始化无涯键鼠盒子COM组件"""
+        """初始化无涯键鼠盒子COM组件（单例模式）"""
+        if self._initialized:
+            return
+
+        self._initialized = True
+
         # 设置DLL路径
         if dll_path:
             self.dll_path = dll_path
@@ -40,6 +52,7 @@ class WyhkmCOM:
         self.dll = None
         self.com_object = None
         self._current_device = None
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
 
         # 检查DLL文件是否存在
         if not os.path.exists(self.dll_path):
@@ -92,8 +105,9 @@ class WyhkmCOM:
                     raise RuntimeError("设备打开失败，所有DPI模式尝试均失败")
             else:
                 print("初始化键鼠配置")
-                self.com_object.SetKeyInterval(100,150)
+                self.com_object.SetKeyInterval(100, 150)
                 self.com_object.SetMousePosMaxOffset(3)
+                self.com_object.SetMouseInterval(100, 150)
 
         else:
             raise RuntimeError("未找到无涯键鼠盒子设备")
@@ -276,22 +290,9 @@ class WyhkmCOM:
     def __del__(self):
         """对象销毁时自动关闭设备"""
         self.close_device()
+        self.executor.shutdown(wait=True)
 
-    def mouse_move(self, x, y, relative=False):
-        """移动鼠标"""
-        self._ensure_device_open()
-        try:
-            if relative:
-                self.com_object.MouseMoveRelative(x, y)
-            else:
-                self.com_object.MouseMove(x, y)
-            return True
-        except Exception as e:
-            print(f"鼠标移动失败: {e}")
-            return False
-
-    def click(self):
-        """鼠标点击"""
+    def left_long_click(self):
         self._ensure_device_open()
         try:
             self.com_object.LeftDown()
@@ -299,19 +300,44 @@ class WyhkmCOM:
             self.com_object.LeftUp()
             return True
         except Exception as e:
-            print(f"鼠标点击失败: {e}")
+            print(f"鼠标左键长按失败: {e}")
             return False
 
-    # def key_press(self, key_name):
-    #     key_name_upper = key_name.upper() if len(key_name) == 1 else key_name
-    #     self._ensure_device_open()
-    #     try:
-    #         key_code = KEY_MAP[key_name_upper]
-    #         self.com_object.KeyPress(key_code)
-    #         return True
-    #     except Exception as e:
-    #         print(f"按键模拟失败: {e}")
-    #         return False
+    def left_click(self):
+        self._ensure_device_open()
+        try:
+            self.com_object.LeftClick()
+            return True
+        except Exception as e:
+            print(f"鼠标左键点击失败: {e}")
+            return False
+
+    def right_click(self):
+        self._ensure_device_open()
+        try:
+            self.com_object.RightClick()
+            return True
+        except Exception as e:
+            print(f"鼠标右键点击失败: {e}")
+            return False
+
+    def right_double_click(self):
+        self._ensure_device_open()
+        try:
+            self.com_object.RightDoubleClick()
+            return True
+        except Exception as e:
+            print(f"鼠标双击右键失败: {e}")
+            return False
+
+    def left_double_click(self):
+        self._ensure_device_open()
+        try:
+            self.com_object.LeftDoubleClick()
+            return True
+        except Exception as e:
+            print(f"鼠标双击左键失败: {e}")
+            return False
 
     def key_press(self, key):
         """
@@ -328,11 +354,40 @@ class WyhkmCOM:
         """
         self._ensure_device_open()
         try:
-            # 直接调用 COM 对象的 KeyPress 方法
             return self.com_object.KeyPress(key)
         except Exception as e:
             print(f"按键模拟失败，键 '{key}': {e}")
             return False
+
+    # delay millisecond
+    def key_long_press(self, key, delay=100):
+        self._ensure_device_open()
+        try:
+            self.com_object.KeyDown(key)
+            self.com_object.DelayRnd(delay - 200, delay + 200)
+            self.com_object.KeyUp(key)
+        except Exception as e:
+            print(f"长按失败，键'{key}': {e}")
+
+    def run(self, key, delay = 1000):
+        self._ensure_device_open()
+        try:
+            self.com_object.KeyDown(key)
+            self.com_object.DelayRnd(90, 120)
+            self.com_object.KeyUp(key)
+            self.com_object.DelayRnd(90, 120)
+            self.com_object.KeyDown(key)
+            self.com_object.DelayRnd(delay - 200, delay + 200)
+            self.com_object.KeyUp(key)
+        except Exception as e:
+            print(f"run失败，键'{key}': {e}")
+
+    def release_keyboard(self):
+        self._ensure_device_open()
+        try:
+            self.com_object.ReleaseKeyboard()
+        except Exception as e:
+            print(f"释放键盘失败: {e}")
 
     def get_cursor_pos(self):
         """
@@ -378,10 +433,82 @@ class WyhkmCOM:
             print(f"移动鼠标失败: {e}")
             return False
 
+    def move_to_target(self, role_x, role_y, target_x, target_y, threshold=5, max_attempts=10):
+        attempts = 0
+        while attempts < max_attempts:
+            if self.is_near_target(role_x, role_y, target_x, target_y, threshold):
+                print(f"角色已到达目标附近 (尝试 {attempts} 次)")
+                return True
+            self.role_move_to(role_x, role_y, target_x, target_y, threshold)
+
+            # 获取角色当前位置 成员变量实时更新
+            role_x, role_y = self.simulate_movement(role_x, role_y, target_x, target_y)
+            attempts += 1
+            time.sleep(0.1)
+        print(f"移动失败，超过最大尝试次数 ({max_attempts})")
+        return False
+
+    def simulate_movement(self, role_x, role_y, target_x, target_y):
+        """模拟移动后的位置（实际应用中应替换为从游戏获取真实位置）"""
+        # 简单模拟：每次移动1/4距离
+        return role_x + (target_x - role_x) / 4, role_y + (target_y - role_y) / 4
+    def is_near_target(self, role_x, role_y, target_x, target_y, threshold=5, distance_type='euclidean'):
+        #distance_type: 距离计算方式 ('euclidean' 或 'manhattan')
+        # 计算距离
+        if distance_type == 'euclidean':
+            # 欧几里得距离 (直线距离)
+            distance = ((role_x - target_x) ** 2 + (role_y - target_y) ** 2) ** 0.5
+        elif distance_type == 'manhattan':
+            # 曼哈顿距离 (网格距离)
+            distance = abs(role_x - target_x) + abs(role_y - target_y)
+        else:
+            raise ValueError(f"无效的距离类型: {distance_type}")
+        return distance <= threshold
+
+    def role_move_to(self, role_x, role_y, target_x, target_y, threshold=5):
+        spacing_x = target_x - role_x
+        spacing_y = target_y - role_y
+        vehicle = 10
+        time_x = abs(spacing_x) / vehicle
+        time_y = abs(spacing_y) / vehicle
+        print(f"spacing_x:{spacing_x} spacing_y:{spacing_y}")
+        print(f"time_x:{time_x} time_y:{time_y}")
+
+        if abs(spacing_x) >= threshold:
+            if spacing_x > 0:
+                self.run("Right", time_x * 1000)
+            elif spacing_x < 0:
+                self.run("Left", time_x * 1000)
+
+        if abs(spacing_y) >= threshold:
+            if spacing_y > 0:
+                self.run("Down", time_y * 1000)
+            elif spacing_y < 0:
+                self.run("Up", time_y * 1000)
+
+
 if __name__ == "__main__":
-    wyhkm = WyhkmCOM()
+    wyhkm1 = WyhkmCOM()
+    # 原有测试代码
+    sleep(4)
+    def test_run():
+        print("run start")
+        wyhkm1.run("Right", 4000)
 
-    wyhkm.key_press(65)  # 键码：65（字母 'A'）
-    wyhkm.key_press("A")  # 键名：'A'
-    wyhkm.key_press("X")  # 功能键 F1
+        # delay = 4
+        # wyhkm1.com_object.KeyDown(key)
+        # sleep(delay)
+        # #wyhkm1.com_object.DelayRnd(delay - 200, delay + 200)
+        # wyhkm1.com_object.KeyUp(key)
+    def hold_x():
+        print("sleep 2")
+        sleep(2)
+        print("hold_x start")
+        wyhkm1.key_press("Tab")
+        delay = 2000
+        wyhkm1.com_object.KeyDown("x")
+        wyhkm1.com_object.DelayRnd(delay - 200, delay + 200)
+        wyhkm1.com_object.KeyUp("x")
 
+    wyhkm1.executor.submit(test_run)
+    wyhkm1.executor.submit(hold_x)

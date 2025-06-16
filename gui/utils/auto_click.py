@@ -6,6 +6,8 @@ import pyautogui
 import keyboard
 from pynput import keyboard as kb
 
+from gui.keybord.keyboard_util import WyhkmCOM
+
 
 class AutoClickerGUI:
     def __init__(self, root):
@@ -26,6 +28,9 @@ class AutoClickerGUI:
 
         # 注册热键
         self.register_hotkeys()
+
+        self.keyboard = WyhkmCOM()
+
 
         print("自动点击器已启动，按 Ctrl+Alt+Q 停止")
 
@@ -114,7 +119,7 @@ class AutoClickerGUI:
         while self.running:
             try:
                 # 点击鼠标左键
-                pyautogui.click(button='left')
+                self.keyboard.left_click()
                 click_time = time.strftime('%H:%M:%S')
                 print(f"点击时间: {click_time}")
                 self.root.title(f"自动点击器 - 上次点击: {click_time}")

@@ -2,6 +2,8 @@ import threading
 import logging
 from abc import ABC, abstractmethod
 
+import win32gui
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -42,3 +44,12 @@ class Task(ABC):
             self.logger.error(f"任务执行出错: {str(e)}", exc_info=True)
         finally:
             self._stop_event.clear()
+    def is_dnf_foreground(self):
+        """
+        判断 DNF 是否为当前焦点窗口
+        """
+        hwnd = win32gui.GetForegroundWindow()
+        title = win32gui.GetWindowText(hwnd)
+        if "地下城与勇士" in title or "DNF" in title:
+            return True
+        return False
