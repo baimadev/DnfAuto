@@ -16,17 +16,18 @@ class MonsterFighterA:
         self.utils = WyhkmCOM()
         self.monsters = {
             'small_monster': {'action': self.attack_small_or_elite, 'type': 'small'},
-            'elite_monster': {'template': cv2.imread(resource_path('../image/elite_monster.png'), 0),
+            'elite_monster': {'template': cv2.imread(resource_path('image/elite_monster.png'), 0),
                               'action': self.attack_small_or_elite, 'type': 'elite'},
             'boss': {'action': self.attack_boss, 'type': 'boss'},
-            'qianjin': {'template': cv2.imread(resource_path('../image/qianjin.png'), 0), 'action': self.run_to_qianjin,
+            'qianjin': {'template': cv2.imread(resource_path('image/qianjin.png'), 0), 'action': self.run_to_qianjin,
                         'type': 'qianjin'},
-            'renwu': {'template': cv2.imread(resource_path('../image/renwu.png'), 0), 'type': 'player'},
-            'shifoujixu': {'template': cv2.imread(resource_path('../image/shifoujixu.png'), 0),
+            'renwu': {'template': cv2.imread(resource_path('image/renwu.png'), 0), 'type': 'player'},
+            'shifoujixu': {'template': cv2.imread(resource_path('image/shifoujixu.png'), 0),
                            'action': self.pickup_boss_drops, 'type': 'pickup'},
-            'zhongmochongbaizhe': {'template': cv2.imread(resource_path('../image/zhongmochongbaizhe.png'), 0),
+            'zhongmochongbaizhe': {'template': cv2.imread(resource_path('image/zhongmochongbaizhe.png'), 0),
                                    'type': 'map'}
         }
+
         self.retry_button_template = cv2.imread(resource_path('image/retry_button.png'), 0)
         if self.retry_button_template is None:
             print("加载失败: retry_button (路径: image/retry_button.png)")
@@ -35,7 +36,7 @@ class MonsterFighterA:
                 if data['template'] is None:
                     print(f"加载失败: {name} (路径: image/{name}.png)")
                 else:
-                    height, width = data['template'].shape
+                    height, width, _ = data['template'].shape
                     print(f"模板加载成功: {name}, 尺寸: {width}x{height}")
         if any('template' in m and m['template'] is None for m in self.monsters.values()):
             raise ValueError("无法加载模板图像，请检查路径！")
@@ -44,7 +45,7 @@ class MonsterFighterA:
         self.qianjin_reached = False
         self.boss_dead = False
         self.shifoujixu_detected_time = None
-        self.attacker = MonsterAttack(self.utils, resource_path('../models/best15.pt'), self.monsters, self.skill_keys)
+        self.attacker = MonsterAttack(self.utils, resource_path('models/best15.pt'), self.monsters, self.skill_keys)
         self.last_display_time = 0
         self.has_applied_buff = False  # 新增：buff 状态变量
 
