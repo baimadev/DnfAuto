@@ -6,6 +6,10 @@ import time
 import pythoncom
 import win32com.client
 import concurrent.futures
+import win32gui
+import cv2
+import numpy as np
+import win32con
 
 KEY_MAP = {
     'Backspace': 8, 'Tab': 9, 'Enter': 13, 'Shift': 16, 'Ctrl': 17, 'Alt': 18,
@@ -311,6 +315,16 @@ class WyhkmCOM:
         except Exception as e:
             print(f"鼠标左键点击失败: {e}")
             return False
+    def click(self,x, y,button = "left"):
+        self._ensure_device_open()
+        if button == "left":
+            self.com_object.MoveTo(x, y)
+            self.com_object.LeftClick()
+        elif button == "right":
+            self.com_object.MoveTo(x, y)
+            self.com_object.RightClick()
+        else:
+            print("请输入正确的按键")
 
     def right_click(self):
         self._ensure_device_open()
@@ -379,6 +393,17 @@ class WyhkmCOM:
             self.com_object.KeyDown(key)
             self.com_object.DelayRnd(delay - 200, delay + 200)
             self.com_object.KeyUp(key)
+        except Exception as e:
+            print(f"run失败，键'{key}': {e}")
+
+    def run_and_hold(self, key):
+        self._ensure_device_open()
+        try:
+            self.com_object.KeyDown(key)
+            self.com_object.DelayRnd(90, 120)
+            self.com_object.KeyUp(key)
+            self.com_object.DelayRnd(90, 120)
+            self.com_object.KeyDown(key)
         except Exception as e:
             print(f"run失败，键'{key}': {e}")
 
@@ -485,6 +510,36 @@ class WyhkmCOM:
                 self.run("Down", time_y * 1000)
             elif spacing_y < 0:
                 self.run("Up", time_y * 1000)
+
+    def activate_window(self, game_window):
+        current_time = time.time()
+        if current_time - self.last_activate_time < self.activate_cooldown:
+            print("窗口激活冷却中，跳过")
+            return
+        try:
+            win32gui.ShowWindow(game_window._hWnd, win32con.SW_RESTORE)
+            win32gui.SetForegroundWindow(game_window._hWnd)
+            win32gui.SetActiveWindow(game_window._hWnd)
+            time.sleep(1)
+            current_foreground = win32gui.GetWindowText(win32gui.GetForegroundWindow())
+            print(f"当前前台窗口: {current_foreground}")
+            if "地下城与勇士：创新世纪" in current_foreground:
+                print("已激活窗口: 地下城与勇士：创新世纪")
+                self.last_activate_time = current_time
+            else:
+                print("窗口激活可能失败")
+        except Exception as e:
+            print(f"激活窗口失败: {e}")
+
+    def detect_template(self, gray_frame, template, threshold=0.9):
+        if template is None:
+            print("模板为空，无法检测")
+            return []
+
+        result = cv2.matchTemplate(gray_frame, template, cv2.TM_CCOEFF_NORMED)
+        locations = np.where(result >= threshold)
+        h, w = template.shape
+        return [(pt[0], pt[1], pt[0] + w, pt[1] + h) for pt in zip(*locations[::-1])]
 
 
 if __name__ == "__main__":
