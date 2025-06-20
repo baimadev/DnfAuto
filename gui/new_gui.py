@@ -17,8 +17,6 @@ from gui.keybord.keyboard_util import GAME_WINDOW_NAME
 from gui.utils.monster_fighter import MonsterFighterA
 from gui.utils.scene_navigator import SceneNavigator, region
 
-sys.stdout.reconfigure(encoding='utf-8')
-
 class GameAutomationWindow(QWidget):
     def __init__(self):
         super().__init__()
