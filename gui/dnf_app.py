@@ -1,6 +1,5 @@
 # dnf_app.py
 import os
-import random
 import sys
 import threading
 import time
@@ -14,6 +13,7 @@ import pygetwindow as gw
 from ultralytics import YOLO
 
 from dnf_gui import DnfGUI
+from gui.keybord.keyboard_util import GAME_WINDOW_NAME
 from gui.task.task_manager import TaskManager
 from gui.utils.monster_fighter import MonsterFighterA
 from gui.utils.scene_navigator import SceneNavigator, region
@@ -25,15 +25,15 @@ class DnfApp:
     def __init__(self, root):
         windll.user32.SetProcessDPIAware()
         self.model_ready = False
-        threading.Thread(target=self._load_model, daemon=True).start()
+        #threading.Thread(target=self._load_model, daemon=True).start()
 
         self.root = root
         # 初始化 GUI
         self.gui = DnfGUI(root, self.start_detection, self.stop_detection)
         # 初始化 Tkinter 覆盖层
-        self.overlay = TkinterOverlay()
+        #self.overlay = TkinterOverlay()
         # 初始化任务管理器
-        self.manager = TaskManager()
+        #self.manager = TaskManager()
         #self.manager.register_task(DetextNextMapTask(self.gui, self.model))
         #self.manager.register_task(DetextChallengeAgain(self.gui))
 
@@ -68,7 +68,7 @@ class DnfApp:
         self.gui.update_buttons(False)
     
     def run_shenyuan_map(self):
-        game_window = gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0]
+        game_window = gw.getWindowsWithTitle(GAME_WINDOW_NAME)[0]
         game_window.moveTo(0, 0)
         self.navigator.utils.activate_window(game_window)
         time.sleep(1)

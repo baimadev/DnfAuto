@@ -27,6 +27,8 @@ KEY_MAP = {
     '[': 219, '\\': 220, ']': 221, "'": 222
 }
 
+GAME_WINDOW_NAME = "地下城与勇士：创新世纪"
+
 class WyhkmCOM:
     _instance = None  # 单例实例
     _initialized = False  # 标记是否已初始化
@@ -57,6 +59,8 @@ class WyhkmCOM:
         self.com_object = None
         self._current_device = None
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        self.last_activate_time = 0
+        self.activate_cooldown = 5
 
         # 检查DLL文件是否存在
         if not os.path.exists(self.dll_path):
@@ -523,8 +527,8 @@ class WyhkmCOM:
             time.sleep(1)
             current_foreground = win32gui.GetWindowText(win32gui.GetForegroundWindow())
             print(f"当前前台窗口: {current_foreground}")
-            if "地下城与勇士：创新世纪" in current_foreground:
-                print("已激活窗口: 地下城与勇士：创新世纪")
+            if GAME_WINDOW_NAME in current_foreground:
+                print(f"已激活窗口: {GAME_WINDOW_NAME}")
                 self.last_activate_time = current_time
             else:
                 print("窗口激活可能失败")
@@ -538,7 +542,7 @@ class WyhkmCOM:
 
         result = cv2.matchTemplate(gray_frame, template, cv2.TM_CCOEFF_NORMED)
         locations = np.where(result >= threshold)
-        h, w = template.shape
+        h, w, _= template.shape
         return [(pt[0], pt[1], pt[0] + w, pt[1] + h) for pt in zip(*locations[::-1])]
 
 
