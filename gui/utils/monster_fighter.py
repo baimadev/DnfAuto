@@ -1,5 +1,6 @@
 import random
 import time
+from time import sleep
 
 import cv2
 import mss
@@ -12,7 +13,7 @@ from gui.utils.scene_navigator import resource_path, region
 
 
 class MonsterFighterA:
-    def __init__(self):
+    def __init__(self,gui):
         self.utils = WyhkmCOM()
         self.monsters = {
             'small_monster': {'action': self.attack_small_or_elite, 'type': 'small'},
@@ -45,7 +46,8 @@ class MonsterFighterA:
         self.qianjin_reached = False
         self.boss_dead = False
         self.shifoujixu_detected_time = None
-        self.attacker = MonsterAttack(self.utils, resource_path('models/best15.pt'), self.monsters, self.skill_keys)
+        self.gui = gui
+        self.attacker = MonsterAttack(self.utils, resource_path('models/best15.pt'), self.monsters, self.skill_keys, gui)
         self.last_display_time = 0
         self.has_applied_buff = False  # 新增：buff 状态变量
 
@@ -58,13 +60,12 @@ class MonsterFighterA:
         target_y = 369
 
         if qianjin_x < target_x:
-            direction = 39  # 向右
+            direction = 'right'  # 向右
         else:
-            direction = 37  # 向左
+            direction = 'left'  # 向左
 
-        print(
-            f"检测到 qianjin，开始奔向固定坐标 (1060, 369)，方向: {'right' if direction == 39 else 'left' if direction == 37 else 'up' if direction == 38 else 'down'}")
-        self.attacker.move_to_fixed_point(target_x=1060, target_y=369, direction=direction)
+        print(f"检测到 qianjin，开始向右")
+        self.attacker.move_to_fixed_point("right")
         self.qianjin_reached = True
         print("到达固定坐标或检测到小怪/Boss，停止奔跑")
 
@@ -74,6 +75,7 @@ class MonsterFighterA:
             self.run_to_qianjin(frame, x1, y1, x2, y2)
 
     def attack_boss(self, frame, x1, y1, x2, y2):
+        print("attack_boss")
         should_run_to_qianjin = self.attacker.attack_boss(frame, x1, y1, x2, y2)
         if should_run_to_qianjin:
             self.run_to_qianjin(frame, x1, y1, x2, y2)
@@ -98,9 +100,8 @@ class MonsterFighterA:
         self.utils.activate_window(game_window)
         self.utils.key_press('Tab')
         print("按下 tab 键聚集掉落物品")
-        start_time = time.time()
-        while time.time() - start_time < 3:
-            self.utils.key_long_press("x", random.uniform(0.1311, 0.1511))
+
+        self.utils.key_long_press("x", 3000)
         print("拾取完成")
 
         gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2GRAY)
@@ -159,13 +160,13 @@ class MonsterFighterA:
 
         print(f"检测到的所有怪物: {detected_monsters}")
 
-        in_zhongmochongbaizhe = any(
-            monster_name == 'zhongmochongbaizhe' for monster_name, _, _, _, _ in detected_monsters)
-        if not in_zhongmochongbaizhe:
-            print("未检测到 zhongmochongbaizhe 地图，跳过怪物检测")
-            return frame, False
-        else:
-            print("检测到 zhongmochongbaizhe 地图，继续处理怪物逻辑")
+        # in_zhongmochongbaizhe = any(
+        #     monster_name == 'zhongmochongbaizhe' for monster_name, _, _, _, _ in detected_monsters)
+        # if not in_zhongmochongbaizhe:
+        #     print("未检测到 zhongmochongbaizhe 地图，跳过怪物检测")
+        #     return frame, False
+        # else:
+        #     print("检测到 zhongmochongbaizhe 地图，继续处理怪物逻辑")
 
         shifoujixu_detected = any(monster_name == 'shifoujixu' for monster_name, _, _, _, _ in detected_monsters)
         if shifoujixu_detected:
@@ -237,3 +238,18 @@ class MonsterFighterA:
 
         print(f"Fight monsters time: {time.time() - start_time:.3f} seconds")
         return frame, should_pickup
+
+
+if __name__ == "__main__":
+    sleep(3)
+    monsters = {
+        'renwu': {'template': cv2.imread(resource_path('../image/renwu.png'), 0), 'type': 'player'},
+    }
+    with mss.mss() as sct:
+        utils = WyhkmCOM()
+        screenshot = sct.grab(region)
+        frame_np = np.array(screenshot)
+        frame = cv2.cvtColor(frame_np, cv2.COLOR_BGRA2BGR)
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        renwu_locations = utils.detect_template(gray_frame, monsters['renwu']['template'])
+        print(f"检测到任务: {len(renwu_locations)} 个位置")

@@ -1,13 +1,17 @@
 import threading
 import queue
+from time import sleep
+
 import cv2
 import numpy as np
 import time
 
 import pyautogui
+from PIL import ImageGrab
+from PyQt6.QtGui import QShortcut, QKeySequence
 from PyQt6.QtWidgets import (QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
                              QHBoxLayout, QMessageBox, QComboBox, QTextEdit, QCheckBox, QApplication)
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, Qt
 import mss
 import pygetwindow as gw
 import random
@@ -26,7 +30,12 @@ class GameAutomationWindow(QWidget):
         self.current_role = 0
         self.total_roles = 1
         self.initUI()
+        QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(self.force_quit)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
+    def force_quit(self):
+        print("检测到强制退出快捷键，正在关闭程序...")
+        self.stop_automation()
     def initUI(self):
         self.setWindowTitle("DNF Automation")
         self.setGeometry(0, 600, 1067, 200)
@@ -106,6 +115,7 @@ class GameAutomationWindow(QWidget):
 
     def log(self, message):
         self.log_text.append(f"{time.strftime('%H:%M:%S')} - {message}")
+        self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
 
     def start_automation(self):
         if self.thread and self.thread.is_alive():
@@ -113,13 +123,13 @@ class GameAutomationWindow(QWidget):
             return
 
         self.navigator = SceneNavigator()
-        self.fighter = MonsterFighterA()
+        self.fighter = MonsterFighterA(self)
 
         self.stop_event.clear()
         self.start_button.setEnabled(False)
         self.end_button.setEnabled(True)
         self.status_label.setText("状态: 运行中")
-        self.log("自动化开始")
+        print("自动化开始")
 
         mode = self.mode_combo.currentText()
         if mode == "深渊地图":
@@ -136,11 +146,11 @@ class GameAutomationWindow(QWidget):
         self.stop_event.set()
         self.thread.join(timeout=2)
         if self.thread.is_alive():
-            self.log("线程未正常结束，可能需要强制关闭程序")
+            print("线程未正常结束，可能需要强制关闭程序")
         self.start_button.setEnabled(True)
         self.end_button.setEnabled(False)
         self.status_label.setText("状态: 已停止")
-        self.log("自动化停止")
+        print("自动化停止")
         cv2.destroyAllWindows()
 
     def update_buttons(self, running):
@@ -152,7 +162,7 @@ class GameAutomationWindow(QWidget):
         if windows:
             game_window = windows[0]
         else:
-            self.log(f"未找到标题为 '{GAME_WINDOW_NAME}' 的窗口")
+            print(f"未找到标题为 '{GAME_WINDOW_NAME}' 的窗口")
             self.update_buttons(False)
             return
         game_window.moveTo(0, 0)
@@ -161,49 +171,57 @@ class GameAutomationWindow(QWidget):
 
         self.total_roles = int(self.role_combo.currentText())
         self.current_role = 0
+        is_in_map = False
 
         with mss.mss() as sct:
             while not self.stop_event.is_set() and self.current_role < self.total_roles:
                 try:
                     screenshot = sct.grab(region)
-                    frame = np.array(screenshot)
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                    frame_np = np.array(screenshot)
+                    frame = cv2.cvtColor(frame_np, cv2.COLOR_BGRA2BGR)
                     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-                    in_town = self.navigator.move_to_shenyuan_map(frame, gray_frame)
-                    zhongmo_locations = self.navigator.utils.detect_template(gray_frame, self.navigator.templates['zhongmochongbaizhe'], threshold=0.8)
-                    self.log(f"检测到终末崇拜者: {len(zhongmo_locations)} 个位置")
+                    screenshot = ImageGrab.grab()
+                    image_np = np.array(screenshot)  # 得到 RGB 格式数组
+
+                    if not is_in_map:
+                        print("call move_to_shenyuan_map")
+                        is_in_map = self.navigator.move_to_shenyuan_map(frame, gray_frame, image_np)
+
+                    zhongmo_locations = self.navigator.utils.detect_template(gray_frame, self.navigator.templates[
+                        'zhongmochongbaizhe'], threshold=0.8)
+                    print(f"检测到终末崇拜者: {len(zhongmo_locations)} 个位置")
                     in_monster_map = bool(zhongmo_locations)
 
+                    # check_in_map = self.navigator.ocr.check_text_exist("终末崇拜者",image_np)
                     if in_monster_map:
-                        self.log("检测到检测到终末崇拜者，进入刷怪模式")
+                        print("检测到检测到终末崇拜者，进入刷怪模式")
+                        is_in_map = True
                         yincangshangdian_locations = self.navigator.utils.detect_template(gray_frame, self.navigator.templates['yincangshangdian'])
                         if yincangshangdian_locations:
-                            self.log("检测到 yincangshangdian.png，暂停刷怪操作")
+                            print("检测到 yincangshangdian.png，暂停刷怪操作")
                             if self.fighter.attacker.current_direction is not None:
                                 self.navigator.utils.com_object.KeyUp(self.fighter.attacker.current_direction)
                                 self.fighter.attacker.current_direction = None
-                                self.log("已释放方向键，暂停移动")
+                                print("已释放方向键，暂停移动")
                             self.navigator.utils.activate_window(game_window)
                             self.navigator.utils.click(373, 39, "left")
-                            self.log("已点击隐藏商店按钮 (373, 39)")
+                            print("已点击隐藏商店按钮 (373, 39)")
                             time.sleep(1)
-                            self.log("隐藏商店操作完成，继续刷怪")
+                            print("隐藏商店操作完成，继续刷怪")
 
                         frame, should_pickup = self.fighter.fight_monsters(frame, gray_frame)
                         if should_pickup:
                             self.current_role += 1
-                            self.log(f"角色 {self.current_role}/{self.total_roles} 已刷完，开始切换角色")
+                            print(f"角色 {self.current_role}/{self.total_roles} 已刷完，开始切换角色")
                             self.switch_role(game_window, sct)
-                    elif in_town:
-                        self.log("在城镇，继续导航")
                     else:
-                        self.log("未检测到明确场景，跳过刷怪逻辑")
+                        print("未检测到明确场景，跳过刷怪逻辑")
 
                     self.frame_queue.put(frame)
                     time.sleep(0.033)
                 except Exception as e:
-                    self.log(f"运行中发生错误: {str(e)}")
+                    print(f"运行中发生错误: {str(e)}")
                     import traceback
                     traceback.print_exc()
                     time.sleep(1)
@@ -213,39 +231,39 @@ class GameAutomationWindow(QWidget):
         screenshot = sct.grab(region)
         gray_frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2GRAY)
         youxicaidan_locations = self.navigator.utils.detect_template(gray_frame, self.navigator.templates['youxicaidan'])
-        self.log(f"检测到游戏菜单: {len(youxicaidan_locations)} 个位置")
+        print(f"检测到游戏菜单: {len(youxicaidan_locations)} 个位置")
         for yx1, yy1, yx2, yy2 in youxicaidan_locations:
             click_x = yx1 + (yx2 - yx1) // 2
             click_y = yy1 + (yy2 - yy1) // 2
-            self.log(f"检测到 youxicaidan.png，点击坐标 ({click_x}, {click_y})")
+            print(f"检测到 youxicaidan.png，点击坐标 ({click_x}, {click_y})")
             self.navigator.utils.activate_window(game_window)
             self.navigator.utils.click(click_x, click_y, "left")
             time.sleep(1)
             break
         else:
-            self.log("未检测到 youxicaidan.png，切换可能失败")
+            print("未检测到 youxicaidan.png，切换可能失败")
 
         screenshot = sct.grab(region)
         gray_frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2GRAY)
         xuanzejuese_locations = self.navigator.utils.detect_template(gray_frame, self.navigator.templates['xuanzejuese'])
-        self.log(f"检测到选择角色按钮: {len(xuanzejuese_locations)} 个位置")
+        print(f"检测到选择角色按钮: {len(xuanzejuese_locations)} 个位置")
         for xx1, xy1, xx2, xy2 in xuanzejuese_locations:
             click_x = xx1 + (xx2 - xx1) // 2
             click_y = xy1 + (xy2 - xy1) // 2
-            self.log(f"检测到 xuanzejuese.png，点击坐标 ({click_x}, {click_y})")
+            print(f"检测到 xuanzejuese.png，点击坐标 ({click_x}, {click_y})")
             self.navigator.utils.activate_window(game_window)
             self.navigator.utils.click(click_x, click_y, "left")
             time.sleep(1)
             break
         else:
-            self.log("未检测到 xuanzejuese.png，切换可能失败")
+            print("未检测到 xuanzejuese.png，切换可能失败")
 
         screenshot = sct.grab(region)
         gray_frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2GRAY)
         xuanzejuese_jiemian_locations = self.navigator.utils.detect_template(gray_frame, self.navigator.templates['xuanzejuese_jiemian'])
-        self.log(f"检测到选择角色界面: {len(xuanzejuese_jiemian_locations)} 个位置")
+        print(f"检测到选择角色界面: {len(xuanzejuese_jiemian_locations)} 个位置")
         if xuanzejuese_jiemian_locations:
-            self.log("检测到 xuanzejuese_jiemian.png，切换角色")
+            print("检测到 xuanzejuese_jiemian.png，切换角色")
             self.navigator.utils.key_press('Right')
             time.sleep(0.1)
             self.navigator.utils.key_press('Space')
@@ -254,24 +272,24 @@ class GameAutomationWindow(QWidget):
             screenshot = sct.grab(region)
             gray_frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2GRAY)
             sailiya_locations = self.navigator.utils.detect_template(gray_frame, self.navigator.templates['sailiya'])
-            self.log(f"检测到塞利亚: {len(sailiya_locations)} 个位置")
+            print(f"检测到塞利亚: {len(sailiya_locations)} 个位置")
             if sailiya_locations:
-                self.log("检测到 sailiya.png，角色切换成功，重置状态")
+                print("检测到 sailiya.png，角色切换成功，重置状态")
                 self.navigator.clicked_youxicaidan = False
                 self.navigator.clicked_shijieditu = False
                 self.fighter.qianjin_reached = False
                 self.fighter.boss_dead = False
                 self.fighter.has_applied_buff = False
             else:
-                self.log("未检测到 sailiya.png，切换可能失败")
+                print("未检测到 sailiya.png，切换可能失败")
         else:
-            self.log("未检测到 xuanzejuese_jiemian.png，切换失败")
+            print("未检测到 xuanzejuese_jiemian.png，切换失败")
 
     def run_yaoqi_tracking(self):
-        self.log("妖气追踪功能尚未实现")
+        print("妖气追踪功能尚未实现")
         while not self.stop_event.is_set():
             time.sleep(1)
-            self.log("等待妖气追踪逻辑...")
+            print("等待妖气追踪逻辑...")
 
     def update_frame(self):
         try:
@@ -290,6 +308,32 @@ def main():
     main_window = GameAutomationWindow()
     main_window.show()
     sys.exit(app.exec())
+
+def test():
+    sleep(4)
+    navigator = SceneNavigator()
+
+    def detect_template(gray_frame, template, threshold=0.9):
+        if template is None:
+            print("模板为空，无法检测")
+            return []
+
+        result = cv2.matchTemplate(gray_frame, template, cv2.TM_CCOEFF_NORMED)
+        locations = np.where(result >= threshold)
+        h, w, _= template.shape
+        return [(pt[0], pt[1], pt[0] + w, pt[1] + h) for pt in zip(*locations[::-1])]
+
+    with mss.mss() as sct:
+        screenshot = sct.grab(region)
+        frame = np.array(screenshot)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        cv2.imshow("Gray Frame", gray_frame)
+        cv2.waitKey(1)
+        print(f"当前帧尺寸: {gray_frame.shape}")
+        result = detect_template(gray_frame, navigator.templates['youxicaidan'])
+        print(f"yx: {len(result)} 个位置")
+
 
 if __name__ == "__main__":
     main()

@@ -12,11 +12,12 @@ from gui.utils.scene_navigator import region
 
 
 class MonsterAttack:
-    def __init__(self, utils, yolo_model_path, monsters_data, skill_keys):
+    def __init__(self, utils, yolo_model_path, monsters_data, skill_keys, gui):
         self.utils = WyhkmCOM()
         self.yolo_model = YOLO(yolo_model_path)
         self.monsters = monsters_data
         self.skill_keys = skill_keys
+        self.gui = gui
         self.skill_key_map = {
             'a': 65, 's': 83, 'd': 68, 'f': 70, 'g': 71, 'h': 72,
             'q': 81, 'w': 87, 'e': 69, 'r': 82, 't': 84, 'x': 88
@@ -52,7 +53,8 @@ class MonsterAttack:
                                 if self.current_direction is not None:
                                     self.utils.com_object.KeyUp(direction)
                                     self.current_direction = None
-                                print(f"检测到 {cls_name}，停止奔跑")
+                                self.utils.release_keyboard()
+                                self.gui.log(f"检测到 {cls_name}，停止奔跑")
                                 return True
 
                 frame_counter += 1
@@ -66,12 +68,12 @@ class MonsterAttack:
                 gray_frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2GRAY)
                 renwu_x, renwu_y = self.get_positions(gray_frame)
                 if renwu_x is None or renwu_y is None:
-                    print("未检测到 renwu，停止奔跑")
+                    self.gui.log("未检测到 renwu，停止奔跑")
                     if direction:
                         self.utils.com_object.KeyUp(direction)
                     break
 
-                print(f"renwu: ({renwu_x}, {renwu_y}), 目标: ({target_x}, {target_y})")
+                self.gui.log(f"renwu: ({renwu_x}, {renwu_y}), 目标: ({target_x}, {target_y})")
                 dx = abs(renwu_x - target_x)
                 dy = abs(renwu_y - target_y)
 
@@ -85,7 +87,7 @@ class MonsterAttack:
 
                 if dx <= 100 and dy <= 50:
                     self.utils.com_object.KeyUp(direction)
-                    print("到达目标位置，松开方向键")
+                    self.gui.log("到达目标位置，松开方向键")
                     return True
                 time.sleep(0.05)
         return False
@@ -93,33 +95,32 @@ class MonsterAttack:
     def face_monster(self, renwu_x, monster_x):
         direction = 'Right' if monster_x > renwu_x else 'Left'
         self.utils.run(direction, random.uniform(0.1311, 0.1511))
-        print(f"调整方向朝 {direction}")
+        self.gui.log(f"调整方向朝 {direction}")
 
     def attack_small_or_elite(self, frame, x1, y1, x2, y2):
         monster_x = x1 + (x2 - x1) // 2
         monster_y = y1 + (y2 - y1) // 2
-        print(f"检测到普通怪物位置: ({monster_x}, {monster_y})")
+        self.gui.log(f"检测到普通怪物位置: ({monster_x}, {monster_y})")
         return self._attack_monster(frame, monster_x, monster_y, is_boss=False)
 
     def attack_boss(self, frame, x1, y1, x2, y2):
         monster_x = x1 + (x2 - x1) // 2
         monster_y = y1 + (y2 - y1) // 2
-        print(f"检测到 Boss 位置: ({monster_x}, {monster_y})")
+        self.gui.log(f"检测到 Boss 位置: ({monster_x}, {monster_y})")
         return self._attack_monster(frame, monster_x, monster_y, is_boss=True)
 
     def _attack_monster(self, frame, monster_x, monster_y, is_boss=False):
         try:
             self.utils.activate_window(gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0])
-            print("游戏窗口已激活")
         except Exception as e:
-            print(f"激活窗口失败: {e}")
+            self.gui.log(f"激活窗口失败: {e}")
 
         renwu_x, renwu_y = self.get_positions(cv2.cvtColor(frame, cv2.COLOR_BGRA2GRAY))
         if renwu_x is not None and renwu_y is not None:
-            print(f"renwu 初始位置: ({renwu_x}, {renwu_y})")
+            self.gui.log(f"renwu 初始位置: ({renwu_x}, {renwu_y})")
             self.move_to_target(monster_x, monster_y)
         else:
-            print("初始未检测到 renwu，但因检测到怪物，继续尝试移动并攻击")
+            self.gui.log("初始未检测到 renwu，但因检测到怪物，继续尝试移动并攻击")
 
         with mss.mss() as sct:
             while True:
@@ -128,19 +129,19 @@ class MonsterAttack:
                 renwu_x, renwu_y = self.get_positions(gray_frame)
                 if renwu_x is not None and renwu_y is not None:
                     self.face_monster(renwu_x, monster_x)
-                    print(f"renwu 当前位置: ({renwu_x}, {renwu_y})，开始攻击")
+                    self.gui.log(f"renwu 当前位置: ({renwu_x}, {renwu_y})，开始攻击")
                 else:
-                    print("未检测到 renwu，默认朝怪物方向攻击")
+                    self.gui.log("未检测到 renwu，默认朝怪物方向攻击")
 
                 skill_count = random.randint(2, 3)
-                print(f"计划释放 {skill_count} 个技能")
+                self.gui.log(f"计划释放 {skill_count} 个技能")
                 for i in range(skill_count):
                     qianjin_locations = self.utils.detect_template(gray_frame, self.monsters['qianjin']['template'])
                     if qianjin_locations:
-                        print("检测到 qianjin，表示小怪已死，立即停止攻击")
+                        self.gui.log("检测到 qianjin，表示小怪已死，立即停止攻击")
                         return True
                     skill_key = random.choice(self.skill_keys)
-                    print(f"释放技能 {skill_key} (第 {i+1}/{skill_count})")
+                    self.gui.log(f"释放技能 {skill_key} (第 {i+1}/{skill_count})")
                     self.utils.key_press(skill_key)
                     time.sleep(random.uniform(0.1011, 0.1511))
                     screenshot = sct.grab(region)
@@ -148,9 +149,9 @@ class MonsterAttack:
 
                 qianjin_locations = self.utils.detect_template(gray_frame, self.monsters['qianjin']['template'])
                 if qianjin_locations:
-                    print("检测到 qianjin，表示小怪已死，立即停止攻击")
+                    self.gui.log("检测到 qianjin，表示小怪已死，立即停止攻击")
                     return True
-                print("技能释放完毕，执行一次普通攻击 X")
+                self.gui.log("技能释放完毕，执行一次普通攻击 X")
                 self.utils.key_press("x")  # X 键普通攻击
                 time.sleep(random.uniform(0.01011, 0.03011))
                 screenshot = sct.grab(region)
@@ -172,12 +173,12 @@ class MonsterAttack:
                                     break
 
                 if not monster_still_exists:
-                    print("怪物已消失，停止攻击")
+                    self.gui.log("怪物已消失，停止攻击")
                     return False
 
                 renwu_x, renwu_y = self.get_positions(gray_frame)
                 if renwu_x is None or renwu_y is None:
-                    print("一轮攻击后未检测到 renwu，随机移动以尝试脱离遮挡")
+                    self.gui.log("一轮攻击后未检测到 renwu，随机移动以尝试脱离遮挡")
                     direction = random.choice([37, 39])
                     self.utils.key_long_press(direction, random.uniform(0.4011, 0.6011))
                     time.sleep(random.uniform(0.4011, 0.6011))

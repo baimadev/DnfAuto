@@ -2,11 +2,13 @@ import os
 import random
 import sys
 import time
+from time import sleep
 
 import cv2
 import pygetwindow as gw
 
 from gui.keybord.keyboard_util import WyhkmCOM
+from ocr.ocr_util import OcrUtil
 
 
 def resource_path(relative_path):
@@ -16,7 +18,7 @@ def resource_path(relative_path):
     return os.path.join(os.path.abspath("."), relative_path)
 
 # 游戏区域和随机延迟定义
-region = {'left': 0, 'top': 0, 'width': 1067, 'height': 600}
+region = {'left': 0, 'top': 0, 'width': 1700, 'height': 956}
 random1_time = round(random.uniform(0.1311, 0.1511), 4)
 random5_time = round(random.uniform(0.4011, 0.6011), 4)
 random6_time = round(random.uniform(2.0111, 2.3011), 4)
@@ -29,7 +31,7 @@ class SceneNavigator:
         self.templates = {
             'sailiya': cv2.imread(resource_path('image/sailiya.png'), 0),
             'shenyuan': cv2.imread(resource_path('image/shenyuan.png'), 0),
-            'diedangquandao_menkou': cv2.imread(resource_path('image/diedangqundao_menkou.png'), 0),
+            'fenjieji': cv2.imread(resource_path('image/fenjieji.png'), 0),
             'shenyuan_xuanze': cv2.imread(resource_path('image/shenyuan_xuanze.png'), 0),
             'zhongmochongbaizhe': cv2.imread(resource_path('image/zhongmochongbaizhe.png'), 0),
             'youxicaidan': cv2.imread(resource_path('image/youxicaidan.png'), 0),
@@ -50,92 +52,97 @@ class SceneNavigator:
         self.right_key_active = False
         self.last_shenyuan_click_time = 0
         self.shenyuan_click_cooldown = 3
-        self.in_town = True
         self.clicked_youxicaidan = False
         self.clicked_shijieditu = False
+        # 点击世界地图 选择深渊
+        self.choice_map = False
+        # 进入地下城 选择深渊
+        self.is_underground_choice_map = False
+        self.ocr = OcrUtil()
 
-    def move_to_shenyuan_map(self, frame, gray_frame):
+    def move_to_shenyuan_map(self, frame, gray_frame, frame_array = None):
         game_window = gw.getWindowsWithTitle(self.game_title)[0]
-        current_time = time.time()
-        town_detected = False
+        is_in_map = False
 
-        sailiya_locations = self.utils.detect_template(gray_frame, self.templates['sailiya'])
-        print(f"检测到塞利亚房间: {len(sailiya_locations)} 个位置")
-        for x1, y1, x2, y2 in sailiya_locations:
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, f"塞丽亚: ({x1},{y1})", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        # 检测到在赛利亚房间
+        # 检测场景
+        # 打开游戏菜单
+        sailiya_locations = self.ocr.check_text_exist(target="赛丽亚", image_path=frame_array)
+        if sailiya_locations is not None:
+            print("检测到“赛丽亚”")
             if not self.clicked_youxicaidan:
-                youxicaidan_locations = self.utils.detect_template(gray_frame, self.templates['youxicaidan'])
-                print(f"检测到游戏菜单: {len(youxicaidan_locations)} 个位置")
-                for yx1, yy1, yx2, yy2 in youxicaidan_locations:
-                    cv2.rectangle(frame, (yx1, yy1), (yx2, yy2), (255, 255, 0), 2)
-                    cv2.putText(frame, f"游戏菜单: ({yx1},{yy1})", (yx1, yy1 - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
-                    click_x = yx1 + (yx2 - yx1) // 2
-                    click_y = yy1 + (yy2 - yy1) // 2
-                    print(f"检测到 youxicaidan.png，点击坐标 ({click_x}, {click_y})")
-                    self.utils.activate_window(game_window)
-                    self.utils.click(click_x, click_y, "left")
-                    self.clicked_youxicaidan = True
-                    time.sleep(1)
-                    break
-            town_detected = True
+                self.utils.key_press("ESC")
+                print(f"点击菜单")
+                self.clicked_youxicaidan = True
+                is_in_map = False
+                return is_in_map
 
+        # 已打开游戏菜单
+        # 点击世界地图
         if self.clicked_youxicaidan and not self.clicked_shijieditu:
-            shijieditu_locations = self.utils.detect_template(gray_frame, self.templates['shijieditu'])
-            print(f"检测到世界地图: {len(shijieditu_locations)} 个位置")
-            for sx1, sy1, sx2, sy2 in shijieditu_locations:
-                cv2.rectangle(frame, (sx1, sy1), (sx2, sy2), (0, 255, 255), 2)
-                cv2.putText(frame, f"世界地图: ({sx1},{sy1})", (sx1, sy1 - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-                click_x = sx1 + (sx2 - sx1) // 2
-                click_y = sy1 + (sy2 - sy1) // 2
-                print(f"检测到 shijieditu.png，点击坐标 ({click_x}, {click_y})")
+            shijieditu_result = self.ocr.check_text_exist(target="世界地图", image_path=frame_array)
+            print(f"检测到“世界地图”: {shijieditu_result}")
+            if shijieditu_result is not None:
                 self.utils.activate_window(game_window)
-                self.utils.click(click_x, click_y, "left")
+                x_center, y_center = shijieditu_result
+                self.utils.click(x_center,y_center, "left")
+                print(f"点击世界地图")
                 self.clicked_shijieditu = True
-                time.sleep(1)
-                break
+                is_in_map = False
+            else:
+                self.clicked_shijieditu = False
 
-        shenyuan_locations = self.utils.detect_template(gray_frame, self.templates['shenyuan'])
-        print(f"检测到深渊: {len(shenyuan_locations)} 个位置")
-        for x1, y1, x2, y2 in shenyuan_locations:
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            cv2.putText(frame, f"深渊: ({x1},{y1})", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-            if current_time - self.last_shenyuan_click_time >= self.shenyuan_click_cooldown:
-                click_x = x1 + (x2 - x1) // 2
-                click_y = y1 + (y2 - y1) // 2
-                print(f"检测到 shenyuan.png，点击坐标 ({click_x}, {click_y})")
+        # 打开了世界地图
+        # 点击深渊
+        if self.clicked_shijieditu and not self.choice_map:
+            zmcbz = self.ocr.check_text_exist(target="终末崇拜者", image_path=frame_array)
+            if zmcbz is not None:
                 self.utils.activate_window(game_window)
-                self.utils.click(click_x, click_y, "left")
-                self.last_shenyuan_click_time = current_time
-                time.sleep(random6_time)
-            town_detected = True
+                x_center, y_center = zmcbz
+                self.utils.click(x_center,y_center, "left")
+                print(f"点击世界地图-深渊: {zmcbz}")
+                self.choice_map = True
+                return False
 
-        diedang_locations = self.utils.detect_template(gray_frame, self.templates['diedangquandao_menkou'])
-        print(f"检测到跌宕群岛门口: {len(diedang_locations)} 个位置")
-        for x1, y1, x2, y2 in diedang_locations:
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)
-            cv2.putText(frame, f"跌宕群岛门口: ({x1},{y1})", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-            print("已经移动到跌宕群岛门口")
+        # 检测是否在跌宕群岛
+        sne = self.ocr.check_text_exist(target="赛尼尔", image_path=frame_array)
+        if sne is not None:
+            print(f"检测到已在深渊门口")
             self.utils.activate_window(game_window)
-            time.sleep(random6_time)
-            self.utils.click(45, 315, "right")
-            town_detected = True
+            # 点击跌宕群岛
+            ddqd = self.ocr.check_text_exist(target="群岛", image_path=frame_array)
+            if ddqd is not None:
+                x_center, y_center = ddqd
+                self.utils.click(x_center, y_center, "right")
+                print(f"点击跌宕群岛 {ddqd}")
+                is_in_map = False
+                return is_in_map
+            else:
+                print(f"未检测到群岛")
 
+        # 检测是否在Underground
         shenyuan_xuanze_locations = self.utils.detect_template(gray_frame, self.templates['shenyuan_xuanze'])
-        print(f"检测到深渊选择: {len(shenyuan_xuanze_locations)} 个位置")
-        for x1, y1, x2, y2 in shenyuan_xuanze_locations:
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
-            cv2.putText(frame, f"深渊选择: ({x1},{y1})", (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-            print("检测到 shenyuan_xuanze.png，左击 (717, 471)")
-            self.utils.activate_window(game_window)
-            self.utils.click(717, 471, "left")
-            town_detected = True
+        if shenyuan_xuanze_locations:
+            print("检测到深渊选择")
+            self.utils.click(1089,738, "left")
+            is_in_map = True
 
-        self.in_town = town_detected
-        return self.in_town
+
+
+
+
+
+
+        # 进入地下城选择界面
+        # 选择深渊地图
+        # shenyuan_xuanze_locations = self.utils.detect_template(gray_frame, self.templates['shenyuan_xuanze'])
+        # for x1, y1, x2, y2 in shenyuan_xuanze_locations:
+        #     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
+        #     cv2.putText(frame, f"深渊选择: ({x1},{y1})", (x1, y1 - 10),
+        #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
+        #     print("检测到深渊选择")
+        #     self.utils.activate_window(game_window)
+        #     self.utils.click(1089,738, "left")
+        #     is_in_map = True
+
+        return is_in_map

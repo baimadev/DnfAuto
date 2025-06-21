@@ -1,3 +1,5 @@
+from time import sleep
+
 import cv2
 from paddleocr import PaddleOCR
 from PIL import Image, ImageGrab
@@ -6,6 +8,7 @@ import pprint
 import time
 
 from ocr.draw_ocr import draw_boxes_on_image
+
 
 
 class SingletonMeta(type):
@@ -27,6 +30,9 @@ class OcrUtil(metaclass=SingletonMeta):
                              # , text_recognition_model_dir="C:/Users/Administrator/.paddlex/official_models/PP-OCRv5_server_rec"
                              )
 
+    # 文本: test
+    # 坐标:
+    # array([2260, 1418, 2274, 1430], dtype=int16)
     def checkTextExist(self, target, image_path):
         result = self.ocr.predict(image_path)
         for res in result:
@@ -35,6 +41,22 @@ class OcrUtil(metaclass=SingletonMeta):
             for text, box in zip(texts, boxes):
                 if target in text:
                     return box
+        return None
+
+    def check_text_exist(self, target, image_path):
+        start_time = time.time()
+        result = self.ocr.predict(image_path)
+        for res in result:
+            texts = res.get('rec_texts', [])
+            boxes = res.get('rec_boxes', [])
+            for text, box in zip(texts, boxes):
+                if target in text:
+                    # 计算中心点坐标
+                    x_center = (box[0] + box[2]) // 2
+                    y_center = (box[1] + box[3]) // 2
+                    return x_center, y_center  # 返回中心点元组
+        end_time = time.time()  # 结束计时（未找到文本的情况）
+        print(f"检测耗时: {end_time - start_time:.4f} 秒")
         return None
 
     def check_multi_text_exist(self, target_list, image_path):
@@ -74,10 +96,12 @@ class OcrUtil(metaclass=SingletonMeta):
 
 
 if __name__ == "__main__":
+    sleep(3)
     ocr_util = OcrUtil()
     start_time = time.time()
     screenshot = ImageGrab.grab()
     image_np = np.array(screenshot)  # 得到 RGB 格式数组
+    #result = ocr_util.check_text_exist("跌宕群岛",image_np)
     result = ocr_util.ocr.predict(image_np)
     end_time = time.time()
     print(f"OCR 检测耗时: {end_time - start_time:.2f} 秒")

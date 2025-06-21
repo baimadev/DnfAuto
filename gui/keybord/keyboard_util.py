@@ -518,7 +518,6 @@ class WyhkmCOM:
     def activate_window(self, game_window):
         current_time = time.time()
         if current_time - self.last_activate_time < self.activate_cooldown:
-            print("窗口激活冷却中，跳过")
             return
         try:
             win32gui.ShowWindow(game_window._hWnd, win32con.SW_RESTORE)
@@ -526,9 +525,7 @@ class WyhkmCOM:
             win32gui.SetActiveWindow(game_window._hWnd)
             time.sleep(1)
             current_foreground = win32gui.GetWindowText(win32gui.GetForegroundWindow())
-            print(f"当前前台窗口: {current_foreground}")
             if GAME_WINDOW_NAME in current_foreground:
-                print(f"已激活窗口: {GAME_WINDOW_NAME}")
                 self.last_activate_time = current_time
             else:
                 print("窗口激活可能失败")
