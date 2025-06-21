@@ -1,5 +1,6 @@
 import random
 import time
+from time import sleep
 
 import cv2
 import mss
@@ -12,9 +13,10 @@ from gui.utils.scene_navigator import region
 
 
 class MonsterAttack:
-    def __init__(self, utils, yolo_model_path, monsters_data, skill_keys, gui):
+    def __init__(self, utils, yolo_model_path, role_model_path, monsters_data, skill_keys, gui):
         self.utils = WyhkmCOM()
         self.yolo_model = YOLO(yolo_model_path)
+        self.yolo_role = YOLO(role_model_path)
         self.monsters = monsters_data
         self.skill_keys = skill_keys
         self.gui = gui
@@ -24,16 +26,23 @@ class MonsterAttack:
         }
         self.current_direction = None
 
-    def get_positions(self, gray_frame):
-        renwu_locations = self.utils.detect_template(gray_frame, self.monsters['renwu']['template'])
-        if renwu_locations:
-            rx1, ry1, rx2, ry2 = renwu_locations[0]
-            renwu_x = rx1 + (rx2 - rx1) // 2
-            renwu_y = ry1 + 80
-            return renwu_x, renwu_y
+    def get_positions(self, frame_rgb):
+        results = self.yolo_role.predict(frame_rgb)
+        for result in results:
+            for box in result.boxes:
+                cls = int(box.cls)
+                label = result.names[cls]
+                conf = float(box.conf)
+                bbox = box.xyxy[0].tolist()
+                if label == 'role':
+                    x1, y1, x2, y2 = map(float, box.xyxy[0])
+                    cx = (x1 + x2) / 2
+                    cy = (y1 + y2) / 2
+                    print(f"检测到role 位置: ({cx}, {cy})")
+                    return cx, cy
         return None, None
 
-    def move_to_fixed_point(self, target_x=1060, target_y=369, direction = "Right"):
+    def move_towards_stop_on_monster(self, direction ="Right"):
         frame_counter = 0
         update_interval = 3
 
@@ -50,13 +59,11 @@ class MonsterAttack:
                         for box in result.boxes:
                             cls_name = result.names[int(box.cls)]
                             if cls_name in ['small_monster', 'boss']:
-                                if self.current_direction is not None:
-                                    self.utils.com_object.KeyUp(direction)
-                                    self.current_direction = None
                                 self.utils.release_keyboard()
-                                self.gui.log(f"检测到 {cls_name}，停止奔跑")
+                                self.current_direction = None
+                                self.utils.release_keyboard()
+                                print(f"检测到 {cls_name}，停止奔跑")
                                 return True
-
                 frame_counter += 1
                 time.sleep(0.01)
 
@@ -64,84 +71,122 @@ class MonsterAttack:
         direction = None
         with mss.mss() as sct:
             while True:
+                step_times = {}  # 存储每个步骤的时间戳
+
+                # 步骤 1: 截图
+                step_times['screenshot_start'] = time.time()
                 screenshot = sct.grab(region)
-                gray_frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2GRAY)
-                renwu_x, renwu_y = self.get_positions(gray_frame)
+                step_times['screenshot_end'] = time.time()
+
+                # 步骤 2: 图像转换
+                step_times['convert_start'] = time.time()
+                frame_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2RGB)
+                step_times['convert_end'] = time.time()
+
+                # 步骤 3: 获取人物位置
+                step_times['get_pos_start'] = time.time()
+                renwu_x, renwu_y = self.get_positions(frame_rgb)
+                step_times['get_pos_end'] = time.time()
+
                 if renwu_x is None or renwu_y is None:
-                    self.gui.log("未检测到 renwu，停止奔跑")
-                    if direction:
-                        self.utils.com_object.KeyUp(direction)
+                    self.utils.release_keyboard()
+                    print("未检测到人物，停止奔跑")
                     break
 
-                self.gui.log(f"renwu: ({renwu_x}, {renwu_y}), 目标: ({target_x}, {target_y})")
                 dx = abs(renwu_x - target_x)
                 dy = abs(renwu_y - target_y)
 
+                print(f"dx: {dx}, dy: {dy}")
+
+                # 步骤 4: 判断方向并移动
                 new_direction = 'Right' if target_x > renwu_x else 'Left'
                 if direction != new_direction:
-                    if direction:
-                        self.utils.com_object.KeyUp(direction)
-                    self.utils.run(new_direction, random.uniform(0.1311, 0.1511))
-                    time.sleep(random.uniform(0.01011, 0.03011))
+                    step_times['run_new_dir_start'] = time.time()
+                    self.utils.release_keyboard()
+                    self.utils.run(new_direction, 100, 10)
+                    step_times['run_new_dir_end'] = time.time()
                     direction = new_direction
+                elif direction is not None:
+                    step_times['run_same_dir_start'] = time.time()
+                    self.utils.run(direction, 100, 10)
+                    step_times['run_same_dir_end'] = time.time()
 
-                if dx <= 100 and dy <= 50:
+                if dx <= 450:
                     self.utils.com_object.KeyUp(direction)
-                    self.gui.log("到达目标位置，松开方向键")
+                    print("到达目标位置，松开方向键")
                     return True
-                time.sleep(0.05)
+
+                time.sleep(0.02)
+
+                # 打印各阶段耗时
+                total_duration = (time.time() - step_times['screenshot_start']) * 1000
+                print(f"本次循环总耗时: {total_duration:.2f} ms")
+                print(f"截图耗时: {(step_times['screenshot_end'] - step_times['screenshot_start']) * 1000:.2f} ms")
+                print(f"图像转换耗时: {(step_times['convert_end'] - step_times['convert_start']) * 1000:.2f} ms")
+                print(f"获取角色位置耗时: {(step_times['get_pos_end'] - step_times['get_pos_start']) * 1000:.2f} ms")
+
+                if 'run_new_dir_start' in step_times:
+                    print(
+                        f"切换方向移动耗时: {(step_times['run_new_dir_end'] - step_times['run_new_dir_start']) * 1000:.2f} ms")
+                elif 'run_same_dir_start' in step_times:
+                    print(
+                        f"保持方向移动耗时: {(step_times['run_same_dir_end'] - step_times['run_same_dir_start']) * 1000:.2f} ms")
+
         return False
 
     def face_monster(self, renwu_x, monster_x):
         direction = 'Right' if monster_x > renwu_x else 'Left'
-        self.utils.run(direction, random.uniform(0.1311, 0.1511))
-        self.gui.log(f"调整方向朝 {direction}")
+        print(f"face_monster {direction} ")
+        self.utils.key_press(direction)
+        self.utils.release_keyboard()
+        print(f"调整方向朝 {direction}")
 
     def attack_small_or_elite(self, frame, x1, y1, x2, y2):
         monster_x = x1 + (x2 - x1) // 2
         monster_y = y1 + (y2 - y1) // 2
-        self.gui.log(f"检测到普通怪物位置: ({monster_x}, {monster_y})")
+        print(f"检测到普通怪物位置: ({monster_x}, {monster_y})")
         return self._attack_monster(frame, monster_x, monster_y, is_boss=False)
 
     def attack_boss(self, frame, x1, y1, x2, y2):
         monster_x = x1 + (x2 - x1) // 2
         monster_y = y1 + (y2 - y1) // 2
-        self.gui.log(f"检测到 Boss 位置: ({monster_x}, {monster_y})")
+        print(f"检测到 Boss 位置: ({monster_x}, {monster_y})")
         return self._attack_monster(frame, monster_x, monster_y, is_boss=True)
 
     def _attack_monster(self, frame, monster_x, monster_y, is_boss=False):
-        try:
-            self.utils.activate_window(gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0])
-        except Exception as e:
-            self.gui.log(f"激活窗口失败: {e}")
+        self.utils.activate_window(gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0])
 
-        renwu_x, renwu_y = self.get_positions(cv2.cvtColor(frame, cv2.COLOR_BGRA2GRAY))
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
+        renwu_x, renwu_y = self.get_positions(frame_rgb)
         if renwu_x is not None and renwu_y is not None:
-            self.gui.log(f"renwu 初始位置: ({renwu_x}, {renwu_y})")
+            print(f"renwu 初始位置: ({renwu_x}, {renwu_y})")
             self.move_to_target(monster_x, monster_y)
         else:
-            self.gui.log("初始未检测到 renwu，但因检测到怪物，继续尝试移动并攻击")
+            print("初始未检测到 renwu，但因检测到怪物，继续尝试移动并攻击")
 
         with mss.mss() as sct:
             while True:
                 screenshot = sct.grab(region)
                 gray_frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2GRAY)
-                renwu_x, renwu_y = self.get_positions(gray_frame)
+                frame_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2RGB)
+                renwu_x, renwu_y = self.get_positions(frame_rgb)
+
                 if renwu_x is not None and renwu_y is not None:
                     self.face_monster(renwu_x, monster_x)
-                    self.gui.log(f"renwu 当前位置: ({renwu_x}, {renwu_y})，开始攻击")
+                    print(f"renwu 当前位置: ({renwu_x}, {renwu_y})，开始攻击")
                 else:
-                    self.gui.log("未检测到 renwu，默认朝怪物方向攻击")
+                    print("未检测到 renwu，默认朝怪物方向攻击")
 
                 skill_count = random.randint(2, 3)
-                self.gui.log(f"计划释放 {skill_count} 个技能")
+                print(f"计划释放 {skill_count} 个技能")
                 for i in range(skill_count):
                     qianjin_locations = self.utils.detect_template(gray_frame, self.monsters['qianjin']['template'])
                     if qianjin_locations:
-                        self.gui.log("检测到 qianjin，表示小怪已死，立即停止攻击")
+                        self.utils.release_keyboard()
+                        print("检测到 qianjin，表示小怪已死，立即停止攻击")
                         return True
                     skill_key = random.choice(self.skill_keys)
-                    self.gui.log(f"释放技能 {skill_key} (第 {i+1}/{skill_count})")
+                    print(f"释放技能 {skill_key} (第 {i+1}/{skill_count})")
                     self.utils.key_press(skill_key)
                     time.sleep(random.uniform(0.1011, 0.1511))
                     screenshot = sct.grab(region)
@@ -149,9 +194,9 @@ class MonsterAttack:
 
                 qianjin_locations = self.utils.detect_template(gray_frame, self.monsters['qianjin']['template'])
                 if qianjin_locations:
-                    self.gui.log("检测到 qianjin，表示小怪已死，立即停止攻击")
+                    print("检测到 qianjin，表示小怪已死，立即停止攻击")
                     return True
-                self.gui.log("技能释放完毕，执行一次普通攻击 X")
+                print("技能释放完毕，执行一次普通攻击 X")
                 self.utils.key_press("x")  # X 键普通攻击
                 time.sleep(random.uniform(0.01011, 0.03011))
                 screenshot = sct.grab(region)
@@ -173,12 +218,12 @@ class MonsterAttack:
                                     break
 
                 if not monster_still_exists:
-                    self.gui.log("怪物已消失，停止攻击")
+                    print("怪物已消失，停止攻击")
                     return False
 
-                renwu_x, renwu_y = self.get_positions(gray_frame)
+                renwu_x, renwu_y = self.get_positions(frame_rgb)
                 if renwu_x is None or renwu_y is None:
-                    self.gui.log("一轮攻击后未检测到 renwu，随机移动以尝试脱离遮挡")
-                    direction = random.choice([37, 39])
-                    self.utils.key_long_press(direction, random.uniform(0.4011, 0.6011))
+                    direction = random.choice(["Left", "Right"])
+                    print(f"一轮攻击后未检测到人物，尝试向{direction}脱离遮挡")
+                    self.utils.key_long_press(direction, 300,100)
                     time.sleep(random.uniform(0.4011, 0.6011))

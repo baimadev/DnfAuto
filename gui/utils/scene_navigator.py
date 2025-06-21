@@ -69,7 +69,7 @@ class SceneNavigator:
         # 打开游戏菜单
         sailiya_locations = self.ocr.check_text_exist(target="赛丽亚", image_path=frame_array)
         if sailiya_locations is not None:
-            print("检测到“赛丽亚”")
+            print("检测到sailiya")
             if not self.clicked_youxicaidan:
                 self.utils.key_press("ESC")
                 print(f"点击菜单")
@@ -81,12 +81,12 @@ class SceneNavigator:
         # 点击世界地图
         if self.clicked_youxicaidan and not self.clicked_shijieditu:
             shijieditu_result = self.ocr.check_text_exist(target="世界地图", image_path=frame_array)
-            print(f"检测到“世界地图”: {shijieditu_result}")
+            print(f"检测到word map: {shijieditu_result}")
             if shijieditu_result is not None:
                 self.utils.activate_window(game_window)
                 x_center, y_center = shijieditu_result
                 self.utils.click(x_center,y_center, "left")
-                print(f"点击世界地图")
+                print(f"点击word map")
                 self.clicked_shijieditu = True
                 is_in_map = False
             else:
@@ -100,49 +100,31 @@ class SceneNavigator:
                 self.utils.activate_window(game_window)
                 x_center, y_center = zmcbz
                 self.utils.click(x_center,y_center, "left")
-                print(f"点击世界地图-深渊: {zmcbz}")
+                print(f"点击word-map-shenyuan: {zmcbz}")
                 self.choice_map = True
                 return False
 
         # 检测是否在跌宕群岛
         sne = self.ocr.check_text_exist(target="赛尼尔", image_path=frame_array)
         if sne is not None:
-            print(f"检测到已在深渊门口")
+            print(f"检测到已在shenyuan门口")
             self.utils.activate_window(game_window)
             # 点击跌宕群岛
             ddqd = self.ocr.check_text_exist(target="群岛", image_path=frame_array)
             if ddqd is not None:
                 x_center, y_center = ddqd
                 self.utils.click(x_center, y_center, "right")
-                print(f"点击跌宕群岛 {ddqd}")
+                print(f"点击diedangqd {ddqd}")
                 is_in_map = False
                 return is_in_map
             else:
-                print(f"未检测到群岛")
+                print(f"未检测到diedangqd")
 
         # 检测是否在Underground
         shenyuan_xuanze_locations = self.utils.detect_template(gray_frame, self.templates['shenyuan_xuanze'])
         if shenyuan_xuanze_locations:
-            print("检测到深渊选择")
+            print("检测到shenyuan选择")
             self.utils.click(1089,738, "left")
             is_in_map = True
-
-
-
-
-
-
-
-        # 进入地下城选择界面
-        # 选择深渊地图
-        # shenyuan_xuanze_locations = self.utils.detect_template(gray_frame, self.templates['shenyuan_xuanze'])
-        # for x1, y1, x2, y2 in shenyuan_xuanze_locations:
-        #     cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
-        #     cv2.putText(frame, f"深渊选择: ({x1},{y1})", (x1, y1 - 10),
-        #                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 2)
-        #     print("检测到深渊选择")
-        #     self.utils.activate_window(game_window)
-        #     self.utils.click(1089,738, "left")
-        #     is_in_map = True
 
         return is_in_map

@@ -190,7 +190,7 @@ class GameAutomationWindow(QWidget):
 
                     zhongmo_locations = self.navigator.utils.detect_template(gray_frame, self.navigator.templates[
                         'zhongmochongbaizhe'], threshold=0.8)
-                    print(f"检测到终末崇拜者: {len(zhongmo_locations)} 个位置")
+                    print(f"检测到zmcbz: {len(zhongmo_locations)} 个位置")
                     in_monster_map = bool(zhongmo_locations)
 
                     # check_in_map = self.navigator.ocr.check_text_exist("终末崇拜者",image_np)
@@ -331,7 +331,7 @@ def test():
         cv2.imshow("Gray Frame", gray_frame)
         cv2.waitKey(1)
         print(f"当前帧尺寸: {gray_frame.shape}")
-        result = detect_template(gray_frame, navigator.templates['youxicaidan'])
+        result = detect_template(gray_frame, navigator.templates['renwu'])
         print(f"yx: {len(result)} 个位置")
 
 

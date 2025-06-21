@@ -378,16 +378,16 @@ class WyhkmCOM:
             return False
 
     # delay millisecond
-    def key_long_press(self, key, delay=100):
+    def key_long_press(self, key, delay=100, offset = 200):
         self._ensure_device_open()
         try:
             self.com_object.KeyDown(key)
-            self.com_object.DelayRnd(delay - 200, delay + 200)
+            self.com_object.DelayRnd(delay - offset, delay + offset)
             self.com_object.KeyUp(key)
         except Exception as e:
             print(f"长按失败，键'{key}': {e}")
 
-    def run(self, key, delay = 1000):
+    def run(self, key, delay = 1000,offset = 200):
         self._ensure_device_open()
         try:
             self.com_object.KeyDown(key)
@@ -395,7 +395,7 @@ class WyhkmCOM:
             self.com_object.KeyUp(key)
             self.com_object.DelayRnd(90, 120)
             self.com_object.KeyDown(key)
-            self.com_object.DelayRnd(delay - 200, delay + 200)
+            self.com_object.DelayRnd(delay - offset, delay + offset)
             self.com_object.KeyUp(key)
         except Exception as e:
             print(f"run失败，键'{key}': {e}")
@@ -545,26 +545,30 @@ class WyhkmCOM:
 
 if __name__ == "__main__":
     wyhkm1 = WyhkmCOM()
-    # 原有测试代码
-    sleep(4)
-    def test_run():
-        print("run start")
-        wyhkm1.run("Right", 4000)
+    start = time.time()
+    wyhkm1.run("Right", 100,10)
+    end = time.time()
+    print("耗时:", end - start)
+    # # 原有测试代码
+    # sleep(4)
+    # def test_run():
+    #     print("run start")
+    #     wyhkm1.run("Right", 4000)
+    #
+    #     # delay = 4
+    #     # wyhkm1.com_object.KeyDown(key)
+    #     # sleep(delay)
+    #     # #wyhkm1.com_object.DelayRnd(delay - 200, delay + 200)
+    #     # wyhkm1.com_object.KeyUp(key)
+    # def hold_x():
+    #     print("sleep 2")
+    #     sleep(2)
+    #     print("hold_x start")
+    #     wyhkm1.key_press("Tab")
+    #     delay = 2000
+    #     wyhkm1.com_object.KeyDown("x")
+    #     wyhkm1.com_object.DelayRnd(delay - 200, delay + 200)
+    #     wyhkm1.com_object.KeyUp("x")
 
-        # delay = 4
-        # wyhkm1.com_object.KeyDown(key)
-        # sleep(delay)
-        # #wyhkm1.com_object.DelayRnd(delay - 200, delay + 200)
-        # wyhkm1.com_object.KeyUp(key)
-    def hold_x():
-        print("sleep 2")
-        sleep(2)
-        print("hold_x start")
-        wyhkm1.key_press("Tab")
-        delay = 2000
-        wyhkm1.com_object.KeyDown("x")
-        wyhkm1.com_object.DelayRnd(delay - 200, delay + 200)
-        wyhkm1.com_object.KeyUp("x")
-
-    wyhkm1.executor.submit(test_run)
-    wyhkm1.executor.submit(hold_x)
+    # wyhkm1.executor.submit(test_run)
+    # wyhkm1.executor.submit(hold_x)

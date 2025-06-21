@@ -3,5 +3,5 @@ val: ../valid/images
 test: ../test/images
 
 nc: 1
-names: ['delila']
+names: ['role']
 

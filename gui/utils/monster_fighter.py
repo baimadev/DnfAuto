@@ -43,41 +43,35 @@ class MonsterFighterA:
             raise ValueError("无法加载模板图像，请检查路径！")
         self.skill_keys = ['a', 's', 'd', 'f', 'g', 'h', 'q', 'w', 'e', 'r', 't']
         self.boss_skill = 'y'
-        self.qianjin_reached = False
         self.boss_dead = False
         self.shifoujixu_detected_time = None
         self.gui = gui
-        self.attacker = MonsterAttack(self.utils, resource_path('models/best15.pt'), self.monsters, self.skill_keys, gui)
+        self.attacker = MonsterAttack(self.utils, resource_path('models/best15.pt'),resource_path('models/role.pt'), self.monsters, self.skill_keys, gui)
         self.last_display_time = 0
         self.has_applied_buff = False  # 新增：buff 状态变量
 
     def run_to_qianjin(self, frame, x1, y1, x2, y2):
         game_window = gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0]
         self.utils.activate_window(game_window)
-        qianjin_x = x1 + (x2 - x1) // 2
-        qianjin_y = y1 + (y2 - y1) // 2
-        target_x = 1060
-        target_y = 369
-
-        if qianjin_x < target_x:
-            direction = 'right'  # 向右
-        else:
-            direction = 'left'  # 向左
-
+        # qianjin_x = x1 + (x2 - x1) // 2
+        # qianjin_y = y1 + (y2 - y1) // 2
+        # target_x = 1060
+        # target_y = 369
         print(f"检测到 qianjin，开始向右")
-        self.attacker.move_to_fixed_point("right")
-        self.qianjin_reached = True
-        print("到达固定坐标或检测到小怪/Boss，停止奔跑")
+        self.attacker.move_towards_stop_on_monster("right")
 
     def attack_small_or_elite(self, frame, x1, y1, x2, y2):
+        print("attack_small_or_elite")
         should_run_to_qianjin = self.attacker.attack_small_or_elite(frame, x1, y1, x2, y2)
         if should_run_to_qianjin:
+            print(" attack_small_or_elite should_run_to_qianjin")
             self.run_to_qianjin(frame, x1, y1, x2, y2)
 
     def attack_boss(self, frame, x1, y1, x2, y2):
         print("attack_boss")
         should_run_to_qianjin = self.attacker.attack_boss(frame, x1, y1, x2, y2)
         if should_run_to_qianjin:
+            print(" attack_boss should_run_to_qianjin")
             self.run_to_qianjin(frame, x1, y1, x2, y2)
 
     def is_gray(self, roi):
@@ -119,7 +113,6 @@ class MonsterFighterA:
         if not retry_button_gray:
             print("再次挑战按钮可用，点击重试")
             self.utils.key_press('F10')  # F10
-            self.qianjin_reached = False
             self.boss_dead = False
             print("已离开 Boss 房间")
         else:
@@ -160,23 +153,14 @@ class MonsterFighterA:
 
         print(f"检测到的所有怪物: {detected_monsters}")
 
-        # in_zhongmochongbaizhe = any(
-        #     monster_name == 'zhongmochongbaizhe' for monster_name, _, _, _, _ in detected_monsters)
-        # if not in_zhongmochongbaizhe:
-        #     print("未检测到 zhongmochongbaizhe 地图，跳过怪物检测")
-        #     return frame, False
-        # else:
-        #     print("检测到 zhongmochongbaizhe 地图，继续处理怪物逻辑")
-
+        # 处理是否继续
         shifoujixu_detected = any(monster_name == 'shifoujixu' for monster_name, _, _, _, _ in detected_monsters)
         if shifoujixu_detected:
             for monster_name, x1, y1, x2, y2 in detected_monsters:
                 if monster_name == 'shifoujixu':
-                    print("检测到 shifoujixu，停止所有刷怪操作并休眠 1.5 秒")
-                    if self.attacker.current_direction is not None:
-                        self.utils.com_object.KeyUp(self.attacker.current_direction)
-                        self.attacker.current_direction = None
-                        print("已释放方向键，停止移动")
+                    print("检测到是否继续，停止所有刷怪操作并休眠 1.5 秒")
+                    self.utils.release_keyboard()
+                    self.attacker.current_direction = None
 
                     sleep_start = time.time()
                     shifoujixu_start_time = None
@@ -224,13 +208,15 @@ class MonsterFighterA:
             print(f"检测到 {monster_name}")
 
             if monster_name == 'qianjin':
-                self.monsters[monster_name]['action'](frame, x1, y1, x2, y2)
-            elif monster_name in ['small_monster', 'elite_monster', 'boss']:
-                if self.qianjin_reached and not any(m[0] == 'qianjin' for m in detected_monsters):
-                    print("qianjin 消失，进入打怪模式")
-                    self.monsters[monster_name]['action'](frame, x1, y1, x2, y2)
-                else:
-                    self.monsters[monster_name]['action'](frame, x1, y1, x2, y2)
+                #检测到前进
+                print("检测到前进")
+                self.run_to_qianjin(frame, x1, y1, x2, y2)
+            elif monster_name == 'boss':
+                #检测到boss
+                self.attack_boss(frame, x1, y1, x2, y2)
+            elif monster_name in ['small_monster', 'elite_monster']:
+                #检测到小怪
+                self.attack_small_or_elite(frame, x1, y1, x2, y2)
 
         current_time = time.time()
         if current_time - self.last_display_time >= 0.033:
