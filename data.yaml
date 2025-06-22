@@ -2,7 +2,12 @@ train: ../train/images
 val: ../valid/images
 test: ../test/images
 
-nc: 3
-names: ['role', 'forward','sfjx']
+nc: 6
+names: ['role', 'forward','sfjx','monster','smsd','can_hen']
 
-
+#role:0
+#forward:1
+#sfjx:2
+#monster:3
+#smsd:4
+#can_hen:5
