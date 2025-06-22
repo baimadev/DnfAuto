@@ -1,4 +1,5 @@
 import random
+import threading
 import time
 from time import sleep
 
@@ -68,42 +69,110 @@ class MonsterAttack:
                 time.sleep(0.01)
 
     def move_to_target(self, target_x, target_y, stop_offset=50):
-        direction = None
-        with mss.mss() as sct:
-            while True:
-                start_time = time.time()
-                screenshot = sct.grab(region)
-                frame_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2RGB)
-                renwu_x, renwu_y = self.get_positions(frame_rgb)
+        # 创建线程间通信对象
+        stop_event = threading.Event()
+        direction_lock = threading.Lock()
+        current_direction = [None]  # 使用列表实现引用传递
+        keyboard_released = [False]  # 跟踪键盘释放状态
 
-                if renwu_x is None or renwu_y is None:
-                    self.utils.release_keyboard()
-                    print("未检测到人物，停止奔跑")
-                    break
+        # 位置获取和条件检测线程
+        def position_and_checker():
+            with mss.mss() as sct:
+                while not stop_event.is_set():
+                    cycle_start = time.time()
 
-                dx = abs(renwu_x - target_x)
-                dy = abs(renwu_y - target_y)
+                    # 获取当前位置
+                    screenshot = sct.grab(region)
+                    frame_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2RGB)
+                    renwu_x, renwu_y = self.get_positions(frame_rgb)
 
-                print(f"dx: {dx}, dy: {dy}")
+                    # 位置检测失败处理
+                    if renwu_x is None or renwu_y is None:
+                        print("未检测到人物，停止运行")
+                        self.utils.release_keyboard()
+                        stop_event.set()
+                        break
 
-                # 步骤 4: 判断方向并移动
-                new_direction = 'Right' if target_x > renwu_x else 'Left'
-                if direction != new_direction:
-                    self.utils.release_keyboard()
-                    self.utils.run(new_direction, 200, 10)
-                    direction = new_direction
-                elif direction is not None:
-                    self.utils.run(direction, 200, 10)
+                    # 实时计算距离
+                    dx = abs(renwu_x - target_x)
 
-                if dx <= 450:
-                    self.utils.com_object.KeyUp(direction)
-                    print("到达目标位置，松开方向键")
-                    return True
-                time.sleep(0.02)
-                # 打印各阶段耗时
-                total_duration = (time.time() - start_time) * 1000
-                print(f"本次循环总耗时: {total_duration:.2f} ms")
+                    # 检查停止条件
+                    if dx <= stop_offset:
+                        print(f"[检测] 达到停止条件 (dx={dx} <= {stop_offset})")
+                        self.utils.release_keyboard()
+                        keyboard_released[0] = True
+                        stop_event.set()
+                        break
 
+                    # 计算新方向（供移动线程使用）
+                    new_dir = 'Right' if target_x > renwu_x else 'Left'
+
+                    # 更新方向（如果有变化）
+                    with direction_lock:
+                        if current_direction[0] != new_dir:
+                            # 方向变化时释放旧按键
+                            if current_direction[0] is not None:
+                                self.utils.release_keyboard()
+                                keyboard_released[0] = True
+                            current_direction[0] = new_dir
+
+                    # 控制循环频率（约50FPS）
+                    cycle_time = (time.time() - cycle_start) * 1000  # 毫秒
+                    if cycle_time < 20:  # 如果执行时间不足20ms
+                        time.sleep((20 - cycle_time) / 1000)  # 休眠剩余时间
+
+                    # 可选：调试信息
+                    # print(f"[检测] 循环耗时: {cycle_time:.2f}ms, dx: {dx}, 方向: {new_dir}")
+
+        # 移动控制线程（使用短按避免长时间阻塞）
+        def movement_controller():
+            last_direction = None
+            while not stop_event.is_set():
+                # 获取当前方向
+                with direction_lock:
+                    direction = current_direction[0]
+
+                # 如果没有方向信息，短暂等待
+                if direction is None:
+                    time.sleep(0.01)
+                    continue
+
+                # 方向切换处理
+                if direction != last_direction:
+                    if last_direction is not None:
+                        # 方向切换时已在检测线程释放按键
+                        pass
+                    last_direction = direction
+                    print(f"[移动] 方向: {direction}")
+
+                # 使用短按避免长时间阻塞（150ms）
+                if not keyboard_released[0]:
+                    self.utils.run(direction, 800, 10)
+
+                # 短暂休眠
+                time.sleep(0.01)
+
+        # 启动线程
+        checker_thread = threading.Thread(target=position_and_checker, daemon=True)
+        mover_thread = threading.Thread(target=movement_controller, daemon=True)
+
+        checker_thread.start()
+        time.sleep(0.1)  # 确保检测线程先启动
+        mover_thread.start()
+
+        # 等待线程结束
+        checker_thread.join()
+        mover_thread.join(timeout=0.5)
+
+        # 确保键盘最终被释放
+        if not keyboard_released[0]:
+            self.utils.release_keyboard()
+
+        # 返回结果
+        if stop_event.is_set():
+            print("成功到达目标")
+            return True
+        print("未能到达目标")
         return False
 
     def face_monster(self, renwu_x, monster_x):
