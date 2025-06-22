@@ -55,15 +55,23 @@ class MonsterAttack:
                 if frame_counter % update_interval == 0:
                     screenshot = sct.grab(region)
                     frame_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2RGB)
+
+                    sfjx = self.check_exist(frame_rgb,"sfjx")
+                    if sfjx is not None:
+                        self.utils.release_keyboard()
+                        print(f"检测到 {sfjx} 停止移动")
+                        return True
+
                     yolo_results = self.yolo_model.predict(frame_rgb)
                     for result in yolo_results:
                         for box in result.boxes:
+                            confidence = box.conf.item()
                             cls_name = result.names[int(box.cls)]
                             if cls_name in ['small_monster', 'boss']:
+                                if confidence <= 0.6:
+                                    continue
                                 self.utils.release_keyboard()
-                                self.current_direction = None
-                                self.utils.release_keyboard()
-                                print(f"检测到 {cls_name}，停止奔跑")
+                                print(f"检测到 {cls_name} 置信度：{confidence:.2f}，停止奔跑")
                                 return True
                 frame_counter += 1
                 time.sleep(0.01)
@@ -206,6 +214,23 @@ class MonsterAttack:
                     return cx, cy
         return None,None
 
+    def check_exist(self, frame_rgb, cls):
+        results = self.yolo_role.predict(frame_rgb)
+        for result in results:
+            for box in result.boxes:
+                confidence = box.conf.item()
+                if confidence < 0.6:
+                     continue
+                cls_name = result.names[int(box.cls)]
+                if cls_name == cls:
+                    return cls_name
+        return None
+
+    def random_move(self):
+        direction = random.choice(["Left", "Right"])
+        self.utils.run(direction, 1000, 100)
+        time.sleep(random.uniform(0.4011, 0.6011))
+
 
     def _attack_monster(self, frame, monster_x, monster_y, is_boss=False):
         self.utils.activate_window(gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0])
@@ -277,7 +302,5 @@ class MonsterAttack:
 
                 renwu_x, renwu_y = self.get_positions(frame_rgb)
                 if renwu_x is None or renwu_y is None:
-                    direction = random.choice(["Left", "Right"])
-                    print(f"一轮攻击后未检测到人物，尝试向{direction}脱离遮挡")
-                    self.utils.key_long_press(direction, 300,100)
-                    time.sleep(random.uniform(0.4011, 0.6011))
+                    print(f"一轮攻击后未检测到人物，尝试随机移动脱离遮挡")
+                    self.random_move()

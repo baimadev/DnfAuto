@@ -6,7 +6,6 @@ import cv2
 import mss
 import numpy as np
 import pygetwindow as gw
-from chardet import detect
 from ultralytics import YOLO
 
 from gui.keybord.keyboard_util import WyhkmCOM
@@ -52,11 +51,7 @@ class MonsterFighterA:
     def run_to_qianjin(self, frame, x1, y1, x2, y2):
         game_window = gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0]
         self.utils.activate_window(game_window)
-        # qianjin_x = x1 + (x2 - x1) // 2
-        # qianjin_y = y1 + (y2 - y1) // 2
-        # target_x = 1060
-        # target_y = 369
-        print(f"检测到 qianjin，开始向右")
+        print(f"检测到前进，开始向右")
         self.attacker.move_towards_stop_on_monster("right")
 
     def attack_small_or_elite(self, frame, x1, y1, x2, y2):
@@ -82,11 +77,6 @@ class MonsterFighterA:
         saturation = mean_hsv[1]
         print(f"按钮颜色 - RGB: [{b:.1f}, {g:.1f}, {r:.1f}], 差异: {color_diff:.1f}, 饱和度: {saturation:.1f}")
         return color_diff < 10 and saturation < 100
-
-    def random_move(self):
-        direction = random.choice(["Left", "Right"])
-        self.utils.key_long_press(direction, 300, 100)
-        time.sleep(random.uniform(0.4011, 0.6011))
 
     def pickup_boss_drops(self, frame, x1, y1, x2, y2):
         print("检测到 是否继续，Boss 已死，开始拾取")
@@ -130,17 +120,23 @@ class MonsterFighterA:
         yolo_results = self.attacker.yolo_model.predict(frame_rgb)
         for result in yolo_results:
             for box in result.boxes:
+                confidence = box.conf.item()
+                if confidence < 0.6:
+                    continue
                 cls_name = result.names[int(box.cls)]
-                if cls_name in ['small_monster', 'boss']:
+                if cls_name in ['boss']:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     detected_monsters.append((cls_name, x1, y1, x2, y2))
 
         yolo_results2 = self.attacker.yolo_role.predict(frame_rgb)
         for result in yolo_results2:
             for box in result.boxes:
+                confidence = box.conf.item()
+                if confidence < 0.6:
+                    continue
                 cls_name = result.names[int(box.cls)]
                 print(f"yolo role {cls_name}")
-                if cls_name in ['forward', 'role', 'sfjx']:
+                if cls_name in ['forward', 'role', 'sfjx', 'monster', 'smsd', 'can_hen']:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     detected_monsters.append((cls_name, x1, y1, x2, y2))
 
@@ -154,10 +150,42 @@ class MonsterFighterA:
         print(f"Process frame time: {time.time() - start_time:.3f} seconds")
         return detected_monsters
 
+    def detect_smsd(self, frame, x1, y1, x2, y2):
+        start_time = time.time()
+        last_check_time = 0
+        with mss.mss() as sct:
+            while True:
+                current_time = time.time()
+                if current_time - last_check_time < 0.1:
+                    time.sleep(0.01)  # 短暂休眠避免CPU过载
+                    continue
+                last_check_time = current_time
+
+                screenshot = sct.grab(region)
+                frame_np = np.array(screenshot)
+                frame = cv2.cvtColor(frame_np, cv2.COLOR_BGRA2BGR)
+                smsd = self.attacker.check_exist(frame, 'smsd')
+                if smsd is not None:
+                    cx, cy = self.attacker.getPositions(frame, 'can_hen')
+                    # 购买残痕
+                    self.utils.release_keyboard()
+                    self.utils.move_to(cx, cy)
+                    time.sleep(random.uniform(0.1011, 0.1511))
+                    self.utils.left_double_click()
+                    continue
+                else :
+                    # 退出商店
+                    self.utils.release_keyboard()
+                    self.utils.key_press("ESC")
+                    time.sleep(random.uniform(0.1011, 0.1511))
+                    break
+
+
     def fight_monsters(self, frame, gray_frame):
         start_time = time.time()
         detected_monsters = self.process_frame(frame, gray_frame)
         should_pickup = False
+
 
         print(f"检测到的所有怪物: {detected_monsters}")
 
@@ -181,23 +209,32 @@ class MonsterFighterA:
 
             if monster_name == 'forward':
                 #检测到前进
-                self.last_execute_time = time.time()
                 print("检测到前进")
                 self.run_to_qianjin(frame, x1, y1, x2, y2)
+                self.last_execute_time = time.time()
             elif monster_name == 'boss':
                 #检测到boss
-                self.last_execute_time = time.time()
                 self.attack_boss(frame, x1, y1, x2, y2)
-            elif monster_name in ['small_monster', 'elite_monster']:
-                #检测到小怪
                 self.last_execute_time = time.time()
+            elif monster_name == 'monster':
+                #检测到小怪
                 self.attack_small_or_elite(frame, x1, y1, x2, y2)
+                self.last_execute_time = time.time()
+            elif monster_name == 'smsd':
+                #检测到神秘商店
+                self.detect_smsd(frame, x1, y1, x2, y2)
+                self.last_execute_time = time.time()
 
+        readable = time.strftime("%H:%M:%S", time.localtime(self.last_execute_time))
+        print(f"last execute {readable}")
         current_time = time.time()
+        current_str= time.strftime("%H:%M:%S", time.localtime(current_time))
+        print(f"last execute {current_str}")
+
         time_diff = current_time - self.last_execute_time
         if time_diff > 4:
             print(f"上次操作已过了 {time_diff:.2f} 秒，触发随机移动")
-            self.random_move()
+            self.attacker.random_move()
 
         current_time = time.time()
         if current_time - self.last_display_time >= 0.033:
@@ -206,31 +243,4 @@ class MonsterFighterA:
         print(f"Fight monsters time: {time.time() - start_time:.3f} seconds")
         return frame, should_pickup
 
-def detect_forward():
-    #yolo = YOLO('../../runs/detect/train4/weights/best.pt')
-    yolo = YOLO('../models/role.pt')
-    sleep(3)
-    with mss.mss() as sct:
-        screenshot = sct.grab(region)
-        frame_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2RGB)
-        forward = yolo.predict(frame_rgb)
-        for result in forward:
-            for box in result.boxes:
-                cls_name = result.names[int(box.cls)]
-                print(f"yolo test {cls_name}")
-
-if __name__ == "__main__":
-    detect_forward()
-    # sleep(3)
-    # monsters = {
-    #     'renwu': {'template': cv2.imread(resource_path('../image/renwu.png'), 0), 'type': 'player'},
-    # }
-    # with mss.mss() as sct:
-    #     utils = WyhkmCOM()
-    #     screenshot = sct.grab(region)
-    #     frame_np = np.array(screenshot)
-    #     frame = cv2.cvtColor(frame_np, cv2.COLOR_BGRA2BGR)
-    #     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    #     renwu_locations = utils.detect_template(gray_frame, monsters['renwu']['template'])
-    #     print(f"检测到任务: {len(renwu_locations)} 个位置")
 

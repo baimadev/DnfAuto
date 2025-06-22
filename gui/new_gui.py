@@ -50,7 +50,7 @@ class GameAutomationWindow(QWidget):
 
         # self.input_label = QLabel("键鼠控制:")
         # self.input_combo = QComboBox()
-        # self.input_combo.addItems(["默认", "幽灵键鼠"])
+        # self.input_combo.addItems(["默认", "幽灵键鼠"])h
         # self.input_combo.setCurrentIndex(0)
 
         self.role_label = QLabel("角色数量:")
