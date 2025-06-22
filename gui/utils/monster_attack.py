@@ -71,22 +71,10 @@ class MonsterAttack:
         direction = None
         with mss.mss() as sct:
             while True:
-                step_times = {}  # 存储每个步骤的时间戳
-
-                # 步骤 1: 截图
-                step_times['screenshot_start'] = time.time()
+                start_time = time.time()
                 screenshot = sct.grab(region)
-                step_times['screenshot_end'] = time.time()
-
-                # 步骤 2: 图像转换
-                step_times['convert_start'] = time.time()
                 frame_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2RGB)
-                step_times['convert_end'] = time.time()
-
-                # 步骤 3: 获取人物位置
-                step_times['get_pos_start'] = time.time()
                 renwu_x, renwu_y = self.get_positions(frame_rgb)
-                step_times['get_pos_end'] = time.time()
 
                 if renwu_x is None or renwu_y is None:
                     self.utils.release_keyboard()
@@ -101,36 +89,20 @@ class MonsterAttack:
                 # 步骤 4: 判断方向并移动
                 new_direction = 'Right' if target_x > renwu_x else 'Left'
                 if direction != new_direction:
-                    step_times['run_new_dir_start'] = time.time()
                     self.utils.release_keyboard()
-                    self.utils.run(new_direction, 100, 10)
-                    step_times['run_new_dir_end'] = time.time()
+                    self.utils.run(new_direction, 200, 10)
                     direction = new_direction
                 elif direction is not None:
-                    step_times['run_same_dir_start'] = time.time()
-                    self.utils.run(direction, 100, 10)
-                    step_times['run_same_dir_end'] = time.time()
+                    self.utils.run(direction, 200, 10)
 
                 if dx <= 450:
                     self.utils.com_object.KeyUp(direction)
                     print("到达目标位置，松开方向键")
                     return True
-
                 time.sleep(0.02)
-
                 # 打印各阶段耗时
-                total_duration = (time.time() - step_times['screenshot_start']) * 1000
+                total_duration = (time.time() - start_time) * 1000
                 print(f"本次循环总耗时: {total_duration:.2f} ms")
-                print(f"截图耗时: {(step_times['screenshot_end'] - step_times['screenshot_start']) * 1000:.2f} ms")
-                print(f"图像转换耗时: {(step_times['convert_end'] - step_times['convert_start']) * 1000:.2f} ms")
-                print(f"获取角色位置耗时: {(step_times['get_pos_end'] - step_times['get_pos_start']) * 1000:.2f} ms")
-
-                if 'run_new_dir_start' in step_times:
-                    print(
-                        f"切换方向移动耗时: {(step_times['run_new_dir_end'] - step_times['run_new_dir_start']) * 1000:.2f} ms")
-                elif 'run_same_dir_start' in step_times:
-                    print(
-                        f"保持方向移动耗时: {(step_times['run_same_dir_end'] - step_times['run_same_dir_start']) * 1000:.2f} ms")
 
         return False
 
@@ -152,6 +124,19 @@ class MonsterAttack:
         monster_y = y1 + (y2 - y1) // 2
         print(f"检测到 Boss 位置: ({monster_x}, {monster_y})")
         return self._attack_monster(frame, monster_x, monster_y, is_boss=True)
+
+    def getPositions(self, frame_rgb, cls):
+        results = self.yolo_role.predict(frame_rgb)
+        for result in results:
+            for box in result.boxes:
+                cls_name = result.names[int(box.cls)]
+                if cls_name == cls:
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    cx = (x1 + x2) / 2  # 计算中心点 x 坐标
+                    cy = (y1 + y2) / 2  # 计算中心点 y 坐标
+                    return cx, cy
+        return None,None
+
 
     def _attack_monster(self, frame, monster_x, monster_y, is_boss=False):
         self.utils.activate_window(gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0])
@@ -180,10 +165,10 @@ class MonsterAttack:
                 skill_count = random.randint(2, 3)
                 print(f"计划释放 {skill_count} 个技能")
                 for i in range(skill_count):
-                    qianjin_locations = self.utils.detect_template(gray_frame, self.monsters['qianjin']['template'])
-                    if qianjin_locations:
+                    cx,cy = self.getPositions(frame_rgb,"forward")
+                    if cx is not None:
                         self.utils.release_keyboard()
-                        print("检测到 qianjin，表示小怪已死，立即停止攻击")
+                        print("检测到前进，表示小怪已死，立即停止攻击")
                         return True
                     skill_key = random.choice(self.skill_keys)
                     print(f"释放技能 {skill_key} (第 {i+1}/{skill_count})")
@@ -192,9 +177,9 @@ class MonsterAttack:
                     screenshot = sct.grab(region)
                     gray_frame = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGRA2GRAY)
 
-                qianjin_locations = self.utils.detect_template(gray_frame, self.monsters['qianjin']['template'])
-                if qianjin_locations:
-                    print("检测到 qianjin，表示小怪已死，立即停止攻击")
+                cx,cy = self.getPositions(frame_rgb,"forward")
+                if cx is not None:
+                    print("检测到前进，表示小怪已死，立即停止攻击")
                     return True
                 print("技能释放完毕，执行一次普通攻击 X")
                 self.utils.key_press("x")  # X 键普通攻击
