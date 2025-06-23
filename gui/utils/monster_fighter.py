@@ -11,6 +11,7 @@ from ultralytics import YOLO
 from gui.keybord.keyboard_util import WyhkmCOM
 from gui.utils.monster_attack import MonsterAttack
 from gui.utils.scene_navigator import resource_path, region
+from gui.utils.yolo_model_util import YoloModelUtil, DetectionTarget
 
 
 class MonsterFighterA:
@@ -42,11 +43,12 @@ class MonsterFighterA:
         self.boss_dead = False
         self.shifoujixu_detected_time = None
         self.gui = gui
-        self.attacker = MonsterAttack(self.utils, resource_path('models/best15.pt'),resource_path('models/role.pt'), self.monsters, self.skill_keys, gui)
+        self.attacker = MonsterAttack(self.monsters, self.skill_keys, gui)
         self.last_display_time = 0
         self.has_applied_buff = False  # 新增：buff 状态变量
         self.repeat_count = 0
         self.last_execute_time = 0
+        self.yolo_util = YoloModelUtil()
 
     def run_to_qianjin(self, frame, x1, y1, x2, y2):
         game_window = gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0]
@@ -116,8 +118,8 @@ class MonsterFighterA:
     def process_frame(self, frame, gray_frame):
         start_time = time.time()
         detected_monsters = []
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGRA2RGB)
-        yolo_results = self.attacker.yolo_model.predict(frame_rgb)
+        image_array = self.yolo_util.capture_screen()
+        yolo_results = self.yolo_util.predict(image_array, False)
         for result in yolo_results:
             for box in result.boxes:
                 confidence = box.conf.item()
@@ -128,7 +130,7 @@ class MonsterFighterA:
                     x1, y1, x2, y2 = map(int, box.xyxy[0])
                     detected_monsters.append((cls_name, x1, y1, x2, y2))
 
-        yolo_results2 = self.attacker.yolo_role.predict(frame_rgb)
+        yolo_results2 = self.yolo_util.predict(image_array)
         for result in yolo_results2:
             for box in result.boxes:
                 confidence = box.conf.item()
@@ -153,32 +155,28 @@ class MonsterFighterA:
     def detect_smsd(self, frame, x1, y1, x2, y2):
         start_time = time.time()
         last_check_time = 0
-        with mss.mss() as sct:
-            while True:
-                current_time = time.time()
-                if current_time - last_check_time < 0.1:
-                    time.sleep(0.01)  # 短暂休眠避免CPU过载
-                    continue
-                last_check_time = current_time
+        while not self.gui.stop_event.is_set():
+            current_time = time.time()
+            if current_time - last_check_time < 0.1:
+                time.sleep(0.01)  # 短暂休眠避免CPU过载
+                continue
+            last_check_time = current_time
 
-                screenshot = sct.grab(region)
-                frame_np = np.array(screenshot)
-                frame = cv2.cvtColor(frame_np, cv2.COLOR_BGRA2BGR)
-                smsd = self.attacker.check_exist(frame, 'smsd')
-                if smsd is not None:
-                    cx, cy = self.attacker.getPositions(frame, 'can_hen')
-                    # 购买残痕
-                    self.utils.release_keyboard()
-                    self.utils.move_to(cx, cy)
-                    time.sleep(random.uniform(0.1011, 0.1511))
-                    self.utils.left_double_click()
-                    continue
-                else :
-                    # 退出商店
-                    self.utils.release_keyboard()
-                    self.utils.key_press("ESC")
-                    time.sleep(random.uniform(0.1011, 0.1511))
-                    break
+            if self.yolo_util.check_exist(DetectionTarget.SMSD):
+                cx, cy = self.yolo_util.get_positions(DetectionTarget.SMSD, frame)
+                # 购买残痕
+                self.utils.release_keyboard()
+                time.sleep(random.uniform(0.1011, 0.1511))
+                self.utils.move_to(cx, cy)
+                time.sleep(random.uniform(0.1011, 0.1511))
+                self.utils.left_double_click()
+                continue
+            else:
+                # 退出商店
+                self.utils.release_keyboard()
+                self.utils.key_press("ESC")
+                time.sleep(random.uniform(0.1011, 0.1511))
+                break
 
 
     def fight_monsters(self, frame, gray_frame):

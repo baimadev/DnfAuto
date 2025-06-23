@@ -116,9 +116,9 @@ class WyhkmCOM:
                 self.com_object.SetKeyInterval(100, 150)
                 self.com_object.SetMousePosMaxOffset(3)
                 self.com_object.SetMouseInterval(100, 150)
-
-        else:
-            raise RuntimeError("未找到无涯键鼠盒子设备")
+        #
+        # else:
+        #     raise RuntimeError("未找到无涯键鼠盒子设备")
 
     def _ensure_initialized(self):
         """确保COM对象已初始化"""

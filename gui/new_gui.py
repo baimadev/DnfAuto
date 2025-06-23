@@ -20,6 +20,8 @@ import sys
 from gui.keybord.keyboard_util import GAME_WINDOW_NAME
 from gui.utils.monster_fighter import MonsterFighterA
 from gui.utils.scene_navigator import SceneNavigator, region
+from gui.utils.yolo_model_util import YoloModelUtil
+
 
 class GameAutomationWindow(QWidget):
     def __init__(self):
@@ -30,6 +32,9 @@ class GameAutomationWindow(QWidget):
         self.current_role = 0
         self.total_roles = 1
         self.initUI()
+        self.yolo_util = YoloModelUtil()
+        self.navigator = SceneNavigator()
+        self.fighter = MonsterFighterA(self)
         QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(self.force_quit)
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
@@ -48,11 +53,6 @@ class GameAutomationWindow(QWidget):
         self.mode_combo.addItems(["深渊地图", "妖气追踪"])
         self.mode_combo.setCurrentIndex(0)
 
-        # self.input_label = QLabel("键鼠控制:")
-        # self.input_combo = QComboBox()
-        # self.input_combo.addItems(["默认", "幽灵键鼠"])h
-        # self.input_combo.setCurrentIndex(0)
-
         self.role_label = QLabel("角色数量:")
         self.role_combo = QComboBox()
         self.role_combo.addItems([str(i) for i in range(1, 51)])
@@ -60,8 +60,6 @@ class GameAutomationWindow(QWidget):
 
         left_layout.addWidget(self.mode_label)
         left_layout.addWidget(self.mode_combo)
-        # left_layout.addWidget(self.input_label)
-        # left_layout.addWidget(self.input_combo)
         left_layout.addWidget(self.role_label)
         left_layout.addWidget(self.role_combo)
         left_layout.addStretch()
@@ -79,15 +77,6 @@ class GameAutomationWindow(QWidget):
         middle_layout.addStretch()
 
         right_layout = QVBoxLayout()
-        # self.login_label = QLabel("请输入卡密:")
-        # self.key_input = QLineEdit()
-        # self.remember_checkbox = QCheckBox("记住密码")
-        # self.login_button = QPushButton("登录验证")
-
-        # right_layout.addWidget(self.login_label)
-        # right_layout.addWidget(self.key_input)
-        # right_layout.addWidget(self.remember_checkbox)
-        # right_layout.addWidget(self.login_button)
         right_layout.addStretch()
 
         main_layout.addLayout(left_layout)
@@ -121,9 +110,6 @@ class GameAutomationWindow(QWidget):
         if self.thread and self.thread.is_alive():
             QMessageBox.information(self, "提示", "自动化已在运行中！")
             return
-
-        self.navigator = SceneNavigator()
-        self.fighter = MonsterFighterA(self)
 
         self.stop_event.clear()
         self.start_button.setEnabled(False)

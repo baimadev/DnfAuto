@@ -1,7 +1,8 @@
 train: ../train/images
 val: ../valid/images
 test: ../test/images
-
+depth_multiple: 1.0  # 模型深度缩放因子
+width_multiple: 1.0  # 通道数缩放因子
 nc: 6
 names: ['role', 'forward','sfjx','monster','smsd','can_hen']
 
