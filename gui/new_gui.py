@@ -1,21 +1,18 @@
+import sys
 import threading
-import queue
+import time
 from time import sleep
 
 import cv2
-import numpy as np
-import time
-
-import pyautogui
-from PIL import ImageGrab
-from PyQt6.QtGui import QShortcut, QKeySequence
-from PyQt6.QtWidgets import (QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout,
-                             QHBoxLayout, QMessageBox, QComboBox, QTextEdit, QCheckBox, QApplication)
-from PyQt6.QtCore import QTimer, Qt
 import mss
+import numpy as np
+import pyautogui
 import pygetwindow as gw
-import random
-import sys
+from PIL import ImageGrab
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QShortcut, QKeySequence
+from PyQt6.QtWidgets import (QWidget, QLabel, QPushButton, QVBoxLayout,
+                             QHBoxLayout, QMessageBox, QComboBox, QTextEdit, QApplication)
 
 from gui.keybord.keyboard_util import GAME_WINDOW_NAME
 from gui.utils.monster_fighter import MonsterFighterA
@@ -28,7 +25,6 @@ class GameAutomationWindow(QWidget):
         super().__init__()
         self.stop_event = threading.Event()
         self.thread = None
-        self.frame_queue = queue.Queue()
         self.current_role = 0
         self.total_roles = 1
         self.initUI()
@@ -97,10 +93,6 @@ class GameAutomationWindow(QWidget):
 
         self.start_button.clicked.connect(self.start_automation)
         self.end_button.clicked.connect(self.stop_automation)
-
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update_frame)
-        self.timer.start(33)
 
     def log(self, message):
         self.log_text.append(f"{time.strftime('%H:%M:%S')} - {message}")
@@ -203,8 +195,6 @@ class GameAutomationWindow(QWidget):
                             self.switch_role(game_window, sct)
                     else:
                         print("未检测到明确场景，跳过刷怪逻辑")
-
-                    self.frame_queue.put(frame)
                     time.sleep(0.033)
                 except Exception as e:
                     print(f"运行中发生错误: {str(e)}")
@@ -276,16 +266,6 @@ class GameAutomationWindow(QWidget):
         while not self.stop_event.is_set():
             time.sleep(1)
             print("等待妖气追踪逻辑...")
-
-    def update_frame(self):
-        try:
-            if not self.frame_queue.empty():
-                frame = self.frame_queue.get_nowait()
-                #cv2.imshow('Game Automation', frame)
-                if cv2.waitKey(1) == 27:
-                    self.stop_automation()
-        except queue.Empty:
-            pass
 
 def main():
     screen_width, screen_height = pyautogui.size()

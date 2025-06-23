@@ -160,24 +160,24 @@ class MonsterAttack:
         self.utils.release_keyboard()
         print(f"调整方向朝 {direction}")
 
-    def attack_small_or_elite(self, frame, x1, y1, x2, y2):
+    def attack_small_or_elite(self, x1, y1, x2, y2):
         monster_x = x1 + (x2 - x1) // 2
         monster_y = y1 + (y2 - y1) // 2
         print(f"检测到普通怪物位置: ({monster_x}, {monster_y})")
-        return self._attack_monster(frame, monster_x, monster_y, is_boss=False)
+        return self._attack_monster(monster_x, monster_y, is_boss=False)
 
-    def attack_boss(self, frame, x1, y1, x2, y2):
+    def attack_boss(self, x1, y1, x2, y2):
         monster_x = x1 + (x2 - x1) // 2
         monster_y = y1 + (y2 - y1) // 2
         print(f"检测到 Boss 位置: ({monster_x}, {monster_y})")
-        return self._attack_monster(frame, monster_x, monster_y, is_boss=True)
+        return self._attack_monster(monster_x, monster_y, is_boss=True)
 
     def random_move(self):
         direction = random.choice(["Left", "Right"])
         self.utils.run(direction, 1000, 100)
         time.sleep(random.uniform(0.4011, 0.6011))
 
-    def _attack_monster(self, frame, monster_x, monster_y, is_boss=False):
+    def _attack_monster(self, monster_x, monster_y, is_boss=False):
 
         self.utils.activate_window(gw.getWindowsWithTitle("地下城与勇士：创新世纪")[0])
         self.move_to_target(monster_x, monster_y)
